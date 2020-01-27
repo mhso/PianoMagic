@@ -89,7 +89,7 @@ def draw_key(img, x, x_1, x_2, any_pressed, is_sharp, press_color=(205, 120, 70)
     cv2.rectangle(img, (x_1, view_height), (x_2, y_2), color, -1)
     if not is_sharp:
         cv2.line(img, (x, view_height), (x, y_unp), (0, 0, 0))
-    
+
 def draw_piano(statuses, key_pos, size):
     img = np.full((size[1], size[0], 3), BG_COLOR, dtype="uint8")
     h, w = img.shape[:2]
