@@ -1,0 +1,3 @@
+/resources/*
+.vscode
+__pycache__
