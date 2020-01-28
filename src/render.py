@@ -1,3 +1,4 @@
+from time import time
 from glob import glob
 from sys import argv
 import cv2
@@ -13,11 +14,11 @@ if __name__ == "__main__":
     NUM_FILES = len(glob(PATH + "*.avi"))
     if "-o" in argv:
         NUM_FILES -= 1
-    FILE = f"{PATH}rendered_{NUM_FILES}.avi"
+    OUTPUT_FILE = util.get_kw_value("out", f"{PATH}rendered_{NUM_FILES}.avi")
     FPS = float(util.get_kw_value("fps", 30))
     SIZE = (1920, 1080)
 
-    WRITER = cv2.VideoWriter(FILE, FCC, FPS, SIZE, True)
+    WRITER = cv2.VideoWriter(OUTPUT_FILE, FCC, FPS, SIZE, True)
 
     DATA, KEY_EVENTS = util.load_key_events(INPUT_NAME)
 
@@ -25,9 +26,14 @@ if __name__ == "__main__":
 
     TIMESTEP = 1 / FPS
     TIMESTAMP = 0
+    STARTED = time()
     EVENTS = 0
-    INDICATORS = 20
+    INDICATORS = 50
     PROGRESS = 0
+    TIME_LEFT = (
+        (DATA[-1]["timestamp"] - DATA[0]["timestamp"]) * 0.08
+        * ((SIZE[0] * SIZE[1]) / (1920*1080)) * FPS
+    )
 
     print("Rendering...")
 
@@ -38,13 +44,17 @@ if __name__ == "__main__":
         TIMESTAMP += TIMESTEP
         if int(EVENTS / len(DATA) * INDICATORS) > PROGRESS:
             PROGRESS = int(EVENTS / len(DATA) * INDICATORS)
+            new_time_left = ((time() - STARTED) / EVENTS) * (len(DATA) - EVENTS)
+            if new_time_left <= TIME_LEFT:
+                TIME_LEFT = new_time_left
             prog_str = "#" * PROGRESS
             remain_str = "_" * (INDICATORS - PROGRESS)
-            print("[" + prog_str + remain_str + "] " + str(int(PROGRESS * (100 / INDICATORS))) + "%", end="", flush=True)
+            print("[" + prog_str + remain_str + "] (" + str(int(PROGRESS * (100 / INDICATORS))) +
+                  "%) " + str(int(TIME_LEFT)) + " s.", end=" ", flush=True)
             print("\r", end="")
 
         WRITER.write(image)
 
-    print("[" + ("#" * INDICATORS) + "] 100%")
+    print("[" + ("#" * INDICATORS) + "] (100%) 0s")
 
     WRITER.release()

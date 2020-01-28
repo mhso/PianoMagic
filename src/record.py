@@ -10,7 +10,7 @@ def create_note_list():
     last_sharp = 0
     sharp_index = 0
     key_index = 0
-    for i in range(88):
+    for _ in range(88):
         if last_sharp == sharp_distances[sharp_index % 5]:
             letter = notes[-1] + "#"
             sharp_index += 1

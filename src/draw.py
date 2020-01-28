@@ -2,13 +2,37 @@ import numpy as np
 import cv2
 from util import BAR_SPEED
 
-BG_COLOR = 75
+BG_COLOR = 65
 KEY_HEIGHT_FRAC = 6
 KEY_WIDTH_FRAC = 52
 KEY_WIDTH_FRAC_SHARP = 160
 BAR_COLOR_FULL = (60, 175, 30)
 BAR_COLOR_SHARP = (50, 130, 30)
 SHARP_OFFSET = 3
+
+def rounded_rect(img, p1, p2, color, thickness, radius):
+    x_1 = p1[0] + radius
+    x_2 = p2[0] - radius
+    y_1 = p1[1] + radius
+    y_2 = p2[1] - radius
+
+    view_height = get_view_height(img.shape[0])
+
+    black = (0, 0, 0)
+
+    cv2.line(img, (x_1, p1[1]), (x_2, p1[1]), black, thickness)
+    cv2.line(img, (x_1, p2[1]), (x_2, p2[1]), black, thickness)
+    cv2.line(img, (p1[0], y_1), (p1[0], y_2), black, thickness)
+    cv2.line(img, (p2[0], y_1), (p2[0], y_2), black, thickness)
+
+    # Corners.
+    cv2.line(img, (p1[0], y_1), (x_1, p1[1]), black, thickness)
+    cv2.line(img, (p1[0], y_2), (x_1, p2[1]), black, thickness)
+    cv2.line(img, (x_2, p1[1]), (p2[0], y_1), black, thickness)
+    cv2.line(img, (x_2, p2[1]), (p2[0], y_2), black, thickness)
+
+    if p2[1] > radius + 3 and p1[1] < view_height - radius - 3:
+        cv2.floodFill(img, None, (x_1 + 5, y_2 - 1), color)
 
 def get_view_height(height):
     return height - (height // KEY_HEIGHT_FRAC)
@@ -67,8 +91,8 @@ def draw_bar(img, x_1, x_2, is_sharp, status):
         if key_status in ("onscreen", "pressed"):
             if key_status == "pressed":
                 any_pressed = True
-            bar_bot = view_height - int(view_height * (key_start / BAR_SPEED))
-            bar_top = view_height - int(view_height * (key_end / BAR_SPEED))
+            bar_bot = view_height - int(view_height * (key_start / BAR_SPEED)) - 1
+            bar_top = view_height - int(view_height * (key_end / BAR_SPEED)) + 1
             if bar_top < view_height:
                 if bar_top < 0:
                     bar_top = 0
@@ -78,8 +102,9 @@ def draw_bar(img, x_1, x_2, is_sharp, status):
                 if is_sharp:
                     color = BAR_COLOR_SHARP
 
-                cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), (0, 0, 0), 2)
-                cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), color, -1)
+                rounded_rect(img, (x_1, bar_top), (x_2, bar_bot), color, 2, 4)
+                #cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), (0, 0, 0), 2)
+                #cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), color, -1)
     return any_pressed
 
 def draw_key(img, x, x_1, x_2, any_pressed, is_sharp, press_color=(205, 120, 70)):
@@ -121,7 +146,7 @@ def find_key(key, key_pos):
             return tupl
     return None
 
-def draw_altered_note(img, note_id, pressed, key_pos, color):
+def draw_altered_note(img, note_id, key_pos, color):
     h, w = img.shape[:2]
     curr_key = find_key(note_id, key_pos)
     keys_to_draw = [curr_key]
@@ -141,11 +166,11 @@ def draw_altered_note(img, note_id, pressed, key_pos, color):
             view_height = get_view_height(h)
             cv2.line(img, (x_2, view_height), (x_2, h), (0, 0, 0), 1)
 
-def draw_correct_note(img, note_id, pressed, key_pos):
-    draw_altered_note(img, note_id, pressed, key_pos, (30, 200, 30))
+def draw_correct_note(img, note_id, key_pos):
+    draw_altered_note(img, note_id, key_pos, (30, 200, 30))
 
-def draw_wrong_note(img, note_id, pressed, key_pos):
-    draw_altered_note(img, note_id, pressed, key_pos, (0, 0, 225))
+def draw_wrong_note(img, note_id, key_pos):
+    draw_altered_note(img, note_id, key_pos, (0, 0, 225))
 
 def end_of_data(timestamp, key_data):
     return timestamp > key_data[-1]["timestamp"]
