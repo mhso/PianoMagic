@@ -3,6 +3,7 @@ from glob import glob
 from pickle import dump
 from sys import argv
 import mido
+import util
 
 def create_note_list():
     notes = []
