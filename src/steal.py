@@ -2,8 +2,8 @@ from time import time, sleep
 from glob import glob
 from pickle import dump
 from mss import mss
-import win32api as win
 import numpy as np
+import win32api as win
 import cv2
 import util
 import draw
@@ -77,22 +77,20 @@ try:
         Y_POS = 3
 
         while not space_pressed():
-            FRAME_TIME = time()
             SC = np.array(sct.grab(BBOX))
 
             PARSED_OBJECTS = get_key_statuses(SC, KEY_POS, Y_POS, STARTED)
             if PARSED_OBJECTS != []:
                 RECORDED_NOTES.extend(PARSED_OBJECTS)
-
-            print(f"It took {(time() - FRAME_TIME):.3f} seconds")
-
-            # cv2.imshow("Test", SC)
-            # cv2.waitKey(0)
 except KeyboardInterrupt:
     pass
 finally:
-    if RECORDED_NOTES[-1]["down"]:
-        RECORDED_NOTES.append(util.create_record_obj(False, 0, RECORDED_NOTES[-1]["key"], time() - STARTED))
+    for key in range(88):
+        for frame_data in reversed(RECORDED_NOTES):
+            if frame_data["key"] == key:
+                if frame_data["down"]:
+                    RECORDED_NOTES.append(util.create_record_obj(False, 0, frame_data["key"], time() - STARTED))
+                    break
     with open(FILE, "wb") as r_out:
         dump(RECORDED_NOTES, r_out)
         print(f"Saved recording to file '{FILE}'")

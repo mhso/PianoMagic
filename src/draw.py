@@ -18,7 +18,7 @@ def get_key_statuses(timestamp, keys):
     processed = 0
     for key_index, event_list in enumerate(keys):
         i = 0
-        while i < len(event_list) and event_list[i] < timestamp + BAR_SPEED:
+        while i < len(event_list)-1 and event_list[i] < timestamp + BAR_SPEED:
             if event_list[i] < timestamp:
                 if i % 2 == 1:
                     key_statuses[key_index].pop()
