@@ -28,6 +28,14 @@ def load_key_events(filename):
 
     return data, key_events
 
+def create_record_obj(down, velocity, key, timestamp):
+    return {
+        "down": down,
+        "velocity": velocity,
+        "key": key,
+        "timestamp": timestamp
+    }
+
 def parse_midi_msg(msg, time_started):
     rec_obj = None
     if msg.type != "clock":
@@ -36,10 +44,11 @@ def parse_midi_msg(msg, time_started):
             "velocity": 0,
             "key": -1
         }
-        rec_obj["key"] = msg.note - 21
+        key = msg.note - 21
         is_down = msg.velocity > 0
-        rec_obj["down"] = is_down
-        rec_obj["timestamp"] = time() - time_started
+        timestamp = time() - time_started
+        velocity = 0
         if is_down:
-            rec_obj["velocity"] = msg.velocity
+            velocity = msg.velocity
+        rec_obj = create_record_obj(is_down, velocity, key, timestamp)
     return rec_obj
