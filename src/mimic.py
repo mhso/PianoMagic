@@ -42,11 +42,12 @@ if __name__ == "__main__":
     DATA, KEY_EVENTS = util.load_key_events(INPUT_NAME)
 
     FPS = float(util.get_kw_value("fps", 30))
-    SIZE = (1920, 1080)
+    SIZE_SPLIT = util.get_kw_value("size", "(1920,1080)").split(",")
+    SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
     KEY_POS = draw.calculate_key_positions(SIZE[0])
     TIMESTEP = 1 / FPS
 
-    BUFFER_SIZE = 400 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
+    BUFFER_SIZE = 300 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
     QUEUE = Queue(int(BUFFER_SIZE))
 
     print("Preparing...")
@@ -58,13 +59,14 @@ if __name__ == "__main__":
         sleep(0.1)
 
     STARTED = time()
+    MS_PER_FRAME = int(TIMESTEP * 1000)
     KEY_GRACE = [0 for _ in range(88)]
     KEYS_HELD = [False] * 88
-    FRAME_ACC_THRESH = FPS // 6
+    FRAME_ACC_THRESH = FPS // 8
     ONGOING_EVENT = [False] * 88
     POINTS_PER_KEY = [0] * 88
     TOTAL_POINTS = 0
-    MS_PER_FRAME = int(TIMESTEP * 1000)
+    STREAK = 0
 
     with mido.open_input() as inport:
         FRAME = 0
@@ -89,6 +91,7 @@ if __name__ == "__main__":
                             ONGOING_EVENT[note_id] = True
                             draw.draw_correct_note(img, note_id, KEY_POS)
                             POINTS_PER_KEY[note_id] = FRAME_ACC_THRESH - KEY_GRACE[note_id]
+                            STREAK += 1
                             TOTAL_POINTS += POINTS_PER_KEY[note_id]
                             KEY_GRACE[note_id] = 0
                         elif frame_event[note_id] < 0 and not KEYS_HELD[note_id]:
@@ -96,6 +99,7 @@ if __name__ == "__main__":
                             POINTS_PER_KEY[note_id] = FRAME_ACC_THRESH - abs(KEY_GRACE[note_id])
                             TOTAL_POINTS += POINTS_PER_KEY[note_id]
                             KEY_GRACE[note_id] = 0
+                            STREAK += 1
                         else:
                             KEY_GRACE[note_id] += frame_event[note_id]
                     elif not ONGOING_EVENT[note_id]:
@@ -106,6 +110,7 @@ if __name__ == "__main__":
                         TOTAL_POINTS += POINTS_PER_KEY[note_id]
                 else:
                     POINTS_PER_KEY[note_id] = 0
+                    STREAK = 0
                     ONGOING_EVENT[note_id] = False
 
             draw.draw_points(img, int(TOTAL_POINTS))

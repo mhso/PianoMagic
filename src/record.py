@@ -34,7 +34,7 @@ create_note_list()
 RECORD = "-r" in argv
 PATH = "../resources/recorded/"
 NUM_FILES = len(glob(PATH + "*.bin"))
-FILE = f"{PATH}rec_{NUM_FILES}.bin"
+OUTPUT_FILE = f"{PATH}" + util.get_kw_value("out", f"rec_{NUM_FILES}") + ".bin"
 RECORDED_NOTES = []
 
 STARTED = time()
@@ -54,6 +54,6 @@ try:
 except KeyboardInterrupt:
     pass
 finally:
-    with open(FILE, "wb") as r_out:
+    with open(OUTPUT_FILE, "wb") as r_out:
         dump(RECORDED_NOTES, r_out)
-        print(f"Saved recording to file '{FILE}'")
+        print(f"Saved recording to file '{OUTPUT_FILE}'")
