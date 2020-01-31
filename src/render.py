@@ -9,7 +9,7 @@ import draw
 
 def writer_loop(writer, queue):
     while True:
-        frame = queue.get()
+        frame = queue.get(True)
         if frame is None:
             break
         writer.write(FRAME)
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     print("Rendering...")
 
-    BUFFER_SIZE = 300 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
+    BUFFER_SIZE = min(300 * ((1920 * 1080) / (SIZE[0] * SIZE[1])), len(DATA))
     QUEUE = Queue(int(BUFFER_SIZE))
     t = Thread(target=writer_loop, args=(WRITER, QUEUE))
     t.start()
@@ -55,10 +55,10 @@ if __name__ == "__main__":
 
     try:
         while not draw.end_of_data(TIMESTAMP, DATA):
-            active_keys, EVENTS = draw.get_key_statuses(TIMESTAMP, KEY_EVENTS)
+            ACTIVE_KEYS, EVENTS = draw.get_key_statuses(TIMESTAMP, KEY_EVENTS)
 
-            FRAME = draw.draw_piano(active_keys, KEY_POS, SIZE)
-            QUEUE.put(FRAME)
+            FRAME = draw.draw_piano(ACTIVE_KEYS, KEY_POS, SIZE)
+            QUEUE.put(FRAME, True)
 
             TIMESTAMP += TIMESTEP
             if int(EVENTS / len(DATA) * INDICATORS) > PROGRESS:

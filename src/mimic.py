@@ -54,10 +54,11 @@ if __name__ == "__main__":
     FPS = float(util.get_kw_value("fps", 30))
     SIZE_SPLIT = util.get_kw_value("size", "(1920,1080)").split(",")
     SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
+    SPEED = float(util.get_kw_value("speed", 1))
     KEY_POS = draw.calculate_key_positions(SIZE[0])
     TIMESTEP = 1 / FPS
 
-    BUFFER_SIZE = 300 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
+    BUFFER_SIZE = min(300 * ((1920 * 1080) / (SIZE[0] * SIZE[1])), len(DATA))
     QUEUE = Queue(int(BUFFER_SIZE))
     FRAME_TOLERANCE = FPS // 5
 
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE))
     p.start()
 
-    while QUEUE.qsize() < len(DATA) and QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.
+    while QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.
         sleep(0.1)
 
     STARTED = time()
@@ -145,6 +146,12 @@ if __name__ == "__main__":
                                 if NOTE_OVER[note_id]:
                                     KEY_GRACE[note_id] = 0
                                     DRAW_EVENT[note_id] = False
+                elif KEYS_HELD[note_id]:
+                    draw.draw_wrong_note(img, note_id, KEY_POS)
+                    if POINTS_PER_KEY[note_id] == 0:
+                        STREAK = 0
+                        POINTS_PER_KEY[note_id] = -10
+                        TOTAL_POINTS += POINTS_PER_KEY[note_id]
 
             draw.draw_points(img, int(TOTAL_POINTS))
             draw.draw_streak(img, STREAK)
@@ -155,7 +162,7 @@ if __name__ == "__main__":
 
             SLEEP = 1
             if FRAME_TIME < MS_PER_FRAME:
-                SLEEP = MS_PER_FRAME - FRAME_TIME
+                SLEEP = (MS_PER_FRAME - FRAME_TIME) / SPEED
 
             KEY = cv2.waitKey(int(SLEEP))
             if KEY == ord('q'):
