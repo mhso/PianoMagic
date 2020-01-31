@@ -8,31 +8,41 @@ import draw
 def filter_events(key_events, prev_presses):
     filtered = [0 for _ in range(88)]
     for note, events in enumerate(key_events):
-        any_pressed = False
         for status, _, _ in events:
             if status == "pressed":
-                filtered[note] = 1
+                if not prev_presses[note]:
+                    filtered[note] = 1
                 prev_presses[note] = True
-                any_pressed = True
-        if prev_presses[note] and not any_pressed:
-            filtered[note] = -1
-            prev_presses[note] = False
+            elif status == "passed" and prev_presses[note]:
+                filtered[note] = -1
+                prev_presses[note] = False
     return filtered, prev_presses
 
-def render_buffered(data, key_events, key_pos, size, timestep, queue):
+def render_buffered(data, key_events, key_pos, size, timestep, queue, tolerance):
     timestamp = 0
 
     prev_press = [False for _ in range(88)]
+
+    headstart = 5
+    offset = []
+    images = []
 
     try:
         while not draw.end_of_data(timestamp, data):
             key_statuses, _ = draw.get_key_statuses(timestamp, key_events)
             filtered, prev_press = filter_events(key_statuses, prev_press)
+            offset.append(filtered)
+            if len(offset) > tolerance:
+                offset.pop(0)
 
             image = draw.draw_piano(key_statuses, key_pos, size, draw_presses=False)
+            if len(images) < headstart:
+                images.append(image)
+                image = images.pop(0)
             timestamp += timestep
-            queue.put((image, filtered), timeout=3)
-    except Exception:
+            queue.put((image, [x for x in offset]), timeout=3)
+    except Exception as e:
+        print(e)
         print("Queue 'put' timed out.")
         exit(0)
 
@@ -49,22 +59,24 @@ if __name__ == "__main__":
 
     BUFFER_SIZE = 300 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
     QUEUE = Queue(int(BUFFER_SIZE))
+    FRAME_TOLERANCE = FPS // 5
 
     print("Preparing...")
 
-    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE))
+    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE))
     p.start()
 
-    while QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.
+    while QUEUE.qsize() < len(DATA) and QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.
         sleep(0.1)
 
     STARTED = time()
     MS_PER_FRAME = int(TIMESTEP * 1000)
     KEY_GRACE = [0 for _ in range(88)]
     KEYS_HELD = [False] * 88
-    FRAME_ACC_THRESH = FPS // 8
-    ONGOING_EVENT = [False] * 88
+    DRAW_EVENT = [False] * 88
+    NOTE_OVER = [False] * 88
     POINTS_PER_KEY = [0] * 88
+    BASE_REWARD = 5
     TOTAL_POINTS = 0
     STREAK = 0
 
@@ -72,48 +84,70 @@ if __name__ == "__main__":
         FRAME = 0
         while not QUEUE.empty():
             FRAME_BEFORE = time()
-            (img, frame_event) = QUEUE.get()
+            (img, frame_events) = QUEUE.get()
             for MSG in inport.iter_pending():
                 PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
                 if PARSED_OBJ is not None:
                     KEYS_HELD[PARSED_OBJ["key"]] = PARSED_OBJ["down"]
 
             for note_id in range(88):
-                if frame_event[note_id]:
-                    if ONGOING_EVENT[note_id]:
-                        if POINTS_PER_KEY[note_id] > 0:
+                frame_reshaped = [x[note_id] for x in frame_events]
+                if any(frame_reshaped):
+                    press_evnt = 0
+                    for evnt in frame_reshaped:
+                        if evnt != 0:
+                            press_evnt = evnt
+                    if POINTS_PER_KEY[note_id] < 0:
+                        POINTS_PER_KEY[note_id] = 0
+                    if KEY_GRACE[note_id] < FRAME_TOLERANCE:
+                        if press_evnt > 0 and KEYS_HELD[note_id]:
                             draw.draw_correct_note(img, note_id, KEY_POS)
-                            ONGOING_EVENT[note_id] = False
-                        elif POINTS_PER_KEY[note_id] < 0:
-                            draw.draw_wrong_note(img, note_id, KEY_POS)
-                    elif abs(KEY_GRACE[note_id]) < FRAME_ACC_THRESH:
-                        if frame_event[note_id] > 0 and KEYS_HELD[note_id]:
-                            ONGOING_EVENT[note_id] = True
-                            draw.draw_correct_note(img, note_id, KEY_POS)
-                            POINTS_PER_KEY[note_id] = FRAME_ACC_THRESH - KEY_GRACE[note_id]
-                            STREAK += 1
-                            TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                            if POINTS_PER_KEY[note_id] == 0:
+                                POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
+                                STREAK += 1
+                                TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                            DRAW_EVENT[note_id] = True
                             KEY_GRACE[note_id] = 0
-                        elif frame_event[note_id] < 0 and not KEYS_HELD[note_id]:
-                            ONGOING_EVENT[note_id] = False
-                            POINTS_PER_KEY[note_id] = FRAME_ACC_THRESH - abs(KEY_GRACE[note_id])
+                        elif press_evnt < 0 and not KEYS_HELD[note_id] and DRAW_EVENT[note_id]:
+                            POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
                             TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                            DRAW_EVENT[note_id] = False
+                            NOTE_OVER[note_id] = True
                             KEY_GRACE[note_id] = 0
                             STREAK += 1
-                        else:
-                            KEY_GRACE[note_id] += frame_event[note_id]
-                    elif not ONGOING_EVENT[note_id]:
-                        ONGOING_EVENT[note_id] = True
-                        draw.draw_wrong_note(img, note_id, KEY_POS)
-                        KEY_GRACE[note_id] = 0
+                    if press_evnt > 0:
+                        NOTE_OVER[note_id] = False
+                    elif not NOTE_OVER[note_id]:
                         POINTS_PER_KEY[note_id] = -10
                         TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                else:
-                    POINTS_PER_KEY[note_id] = 0
-                    STREAK = 0
-                    ONGOING_EVENT[note_id] = False
+                        NOTE_OVER[note_id] = True
+                        KEY_GRACE[note_id] = 0
+                    if not NOTE_OVER[note_id]:
+                        KEY_GRACE[note_id] += 1
+                if KEY_GRACE[note_id] >= FRAME_TOLERANCE and not NOTE_OVER[note_id]:
+                    draw.draw_wrong_note(img, note_id, KEY_POS)
+                    if POINTS_PER_KEY[note_id] == 0:
+                        STREAK = 0
+                        POINTS_PER_KEY[note_id] = -10
+                        TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                elif DRAW_EVENT[note_id]:
+                    if DRAW_EVENT[note_id] > 0 and KEYS_HELD[note_id]:
+                        KEY_GRACE[note_id] = 0
+                        draw.draw_correct_note(img, note_id, KEY_POS)
+                    else:
+                        KEY_GRACE[note_id] += 1
+                        if KEY_GRACE[note_id] >= FRAME_TOLERANCE:
+                            draw.draw_wrong_note(img, note_id, KEY_POS)
+                            if POINTS_PER_KEY[note_id] == 0:
+                                STREAK = 0
+                                POINTS_PER_KEY[note_id] = -10
+                                TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                                if NOTE_OVER[note_id]:
+                                    KEY_GRACE[note_id] = 0
+                                    DRAW_EVENT[note_id] = False
 
             draw.draw_points(img, int(TOTAL_POINTS))
+            draw.draw_streak(img, STREAK)
 
             cv2.imshow("Test", img)
 

@@ -85,8 +85,8 @@ try:
 except KeyboardInterrupt:
     pass
 finally:
-    for key in range(88):
-        for frame_data in reversed(RECORDED_NOTES):
+    for frame_data in reversed(RECORDED_NOTES):
+        for key in range(88):
             if frame_data["key"] == key:
                 if frame_data["down"]:
                     RECORDED_NOTES.append(util.create_record_obj(False, 0, frame_data["key"], time() - STARTED))

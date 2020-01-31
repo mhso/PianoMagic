@@ -24,7 +24,7 @@ def load_key_events(filename):
         shift = BAR_SPEED - data[0]["timestamp"]
         for key_data in data:
             key_data["timestamp"] += shift
-            key_events[key_data["key"]].append(key_data["timestamp"])
+            key_events[key_data["key"]].append((key_data["timestamp"], key_data["down"]))
 
     return data, key_events
 

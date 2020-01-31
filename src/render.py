@@ -46,11 +46,12 @@ if __name__ == "__main__":
     )
 
     print("Rendering...")
-    
+
     BUFFER_SIZE = 300 * ((1920 * 1080) / (SIZE[0] * SIZE[1]))
     QUEUE = Queue(int(BUFFER_SIZE))
     t = Thread(target=writer_loop, args=(WRITER, QUEUE))
     t.start()
+    FRAMES = 0
 
     try:
         while not draw.end_of_data(TIMESTAMP, DATA):
@@ -70,8 +71,11 @@ if __name__ == "__main__":
                 print("[" + prog_str + remain_str + "] (" + str(int(PROGRESS * (100 / INDICATORS))) +
                     "%) " + str(int(TIME_LEFT)) + " s.", end=" ", flush=True)
                 print("\r", end="")
+            FRAMES += 1
 
         print("[" + ("#" * INDICATORS) + "] (100%) 0s")
+        print(f"Rendered video to file '{OUTPUT_FILE}'")
+        print(FRAMES / TIMESTAMP)
     finally:
         QUEUE.put(None)
         t.join()

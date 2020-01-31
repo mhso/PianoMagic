@@ -10,30 +10,6 @@ BAR_COLOR_FULL = (60, 175, 30)
 BAR_COLOR_SHARP = (50, 130, 30)
 SHARP_OFFSET = 3
 
-def rounded_rect(img, p1, p2, color, thickness, radius):
-    x_1 = p1[0] + radius
-    x_2 = p2[0] - radius
-    y_1 = p1[1] + radius
-    y_2 = p2[1] - radius
-
-    view_height = get_view_height(img.shape[0])
-
-    black = (0, 0, 0)
-
-    cv2.line(img, (x_1, p1[1]), (x_2, p1[1]), black, thickness)
-    cv2.line(img, (x_1, p2[1]), (x_2, p2[1]), black, thickness)
-    cv2.line(img, (p1[0], y_1), (p1[0], y_2), black, thickness)
-    cv2.line(img, (p2[0], y_1), (p2[0], y_2), black, thickness)
-
-    # Corners.
-    cv2.line(img, (p1[0], y_1), (x_1, p1[1]), black, thickness)
-    cv2.line(img, (p1[0], y_2), (x_1, p2[1]), black, thickness)
-    cv2.line(img, (x_2, p1[1]), (p2[0], y_1), black, thickness)
-    cv2.line(img, (x_2, p2[1]), (p2[0], y_2), black, thickness)
-
-    if p2[1] > radius + 3 and p1[1] < view_height - radius - 3:
-        cv2.floodFill(img, None, (x_1 + 5, y_2 - 1), color)
-
 def get_view_height(height):
     return height - (height // KEY_HEIGHT_FRAC)
 
@@ -42,16 +18,18 @@ def get_key_statuses(timestamp, keys):
     processed = 0
     for key_index, event_list in enumerate(keys):
         i = 0
-        while i < len(event_list)-1 and event_list[i] < timestamp + BAR_SPEED:
-            if event_list[i] < timestamp:
-                if i % 2 == 1:
-                    key_statuses[key_index].pop()
+        while i < len(event_list) and event_list[i][0] < timestamp + BAR_SPEED:
+            event_time, down = event_list[i]
+            if event_time < timestamp:
+                if down:
+                    key_statuses[key_index].append(("pressed", 0, event_list[i+1][0] - timestamp))
                     processed += 1
                 else:
-                    key_statuses[key_index].append(("pressed", 0, event_list[i+1] - timestamp))
+                    key_statuses[key_index][-1] = ("passed", 0, 0)
                     processed += 1
-            elif i % 2 == 0:
-                key_statuses[key_index].append(("onscreen", event_list[i] - timestamp, event_list[i+1] - timestamp))
+            elif down and i < len(event_list) - 1:
+                end = event_list[i+1][0] - timestamp if i < len(event_list) - 1 else -1
+                key_statuses[key_index].append(("onscreen", event_time - timestamp, end))
             i += 1
     return key_statuses, processed
 
@@ -83,6 +61,30 @@ def calculate_key_positions(width):
             keys.append((x, i, False))
     return keys + sharps
 
+def draw_rounded_rect(img, p1, p2, color, thickness, radius):
+    x_1 = p1[0] + radius
+    x_2 = p2[0] - radius
+    y_1 = p1[1] + radius
+    y_2 = p2[1] - radius
+
+    view_height = get_view_height(img.shape[0])
+
+    black = (0, 0, 0)
+
+    cv2.line(img, (x_1, p1[1]), (x_2, p1[1]), black, thickness)
+    cv2.line(img, (x_1, p2[1]), (x_2, p2[1]), black, thickness)
+    cv2.line(img, (p1[0], y_1), (p1[0], y_2), black, thickness)
+    cv2.line(img, (p2[0], y_1), (p2[0], y_2), black, thickness)
+
+    # Corners.
+    cv2.line(img, (p1[0], y_1), (x_1, p1[1]), black, thickness)
+    cv2.line(img, (p1[0], y_2), (x_1, p2[1]), black, thickness)
+    cv2.line(img, (x_2, p1[1]), (p2[0], y_1), black, thickness)
+    cv2.line(img, (x_2, p2[1]), (p2[0], y_2), black, thickness)
+
+    if p2[1] > radius + 3 and p1[1] < view_height - radius - 3:
+        cv2.floodFill(img, None, (x_1 + 5, y_2 - 1), color)
+
 def draw_bar(img, x_1, x_2, is_sharp, status):
     height = img.shape[0]
     any_pressed = False
@@ -92,7 +94,8 @@ def draw_bar(img, x_1, x_2, is_sharp, status):
             if key_status == "pressed":
                 any_pressed = True
             bar_bot = view_height - int(view_height * (key_start / BAR_SPEED)) - 1
-            bar_top = view_height - int(view_height * (key_end / BAR_SPEED)) + 1
+            bar_top = (view_height - int(view_height * (key_end / BAR_SPEED)) + 1
+                       if key_end > -1 else 0)
             if bar_top < view_height:
                 if bar_top < 0:
                     bar_top = 0
@@ -102,9 +105,7 @@ def draw_bar(img, x_1, x_2, is_sharp, status):
                 if is_sharp:
                     color = BAR_COLOR_SHARP
 
-                rounded_rect(img, (x_1, bar_top), (x_2, bar_bot), color, 2, 4)
-                #cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), (0, 0, 0), 2)
-                #cv2.rectangle(img, (x_1, bar_top), (x_2, bar_bot), color, -1)
+                draw_rounded_rect(img, (x_1, bar_top), (x_2, bar_bot), color, 2, 4)
     return any_pressed
 
 def draw_key(img, x, x_1, x_2, any_pressed, is_sharp, press_color=(205, 120, 70)):
@@ -175,8 +176,16 @@ def draw_wrong_note(img, note_id, key_pos):
 def end_of_data(timestamp, key_data):
     return timestamp > key_data[-1]["timestamp"]
 
+def draw_str(img, x, text):
+    cv2.putText(img, text, (x, 50), cv2.FONT_HERSHEY_COMPLEX, 1.5, (0, 0, 0), 8)
+    cv2.putText(img, text, (x, 50), cv2.FONT_HERSHEY_COMPLEX, 1.5, (255, 255, 255), 2)
+
 def draw_points(img, points):
-    h, w = img.shape[:2]
+    w = img.shape[1]
     pt_str = "Score: " + str(points)
-    x = len(pt_str) * 30
-    cv2.putText(img, pt_str, (w-x, 50), cv2.FONT_HERSHEY_COMPLEX, 1.5, (0, 0, 255), 2)
+    x = w - len(pt_str) * 30
+    draw_str(img, x, pt_str)
+
+def draw_streak(img, streak):
+    pt_str = "Streak: " + str(streak)
+    draw_str(img, 20, pt_str)

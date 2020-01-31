@@ -46,14 +46,15 @@ try:
             if PARSED_OBJ is not None and RECORD:
                 RECORDED_NOTES.append(PARSED_OBJ)
 
-            NOTE = get_note(MSG.note)
-            if NOTE.velocity > 0:
-                print(f"{NOTE} up")
-            else:
-                print(f"{NOTE} down")
+                NOTE = get_note(MSG.note)
+                if MSG.velocity > 0:
+                    print(f"{NOTE} up")
+                else:
+                    print(f"{NOTE} down")
 except KeyboardInterrupt:
     pass
 finally:
-    with open(OUTPUT_FILE, "wb") as r_out:
-        dump(RECORDED_NOTES, r_out)
-        print(f"Saved recording to file '{OUTPUT_FILE}'")
+    if RECORD:
+        with open(OUTPUT_FILE, "wb") as r_out:
+            dump(RECORDED_NOTES, r_out)
+            print(f"Saved recording to file '{OUTPUT_FILE}'")
