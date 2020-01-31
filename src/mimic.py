@@ -1,7 +1,7 @@
 from time import time, sleep
 from multiprocessing import Process, Queue
-import cv2
 import mido
+import cv2
 import util
 import draw
 
@@ -153,7 +153,8 @@ if __name__ == "__main__":
                         POINTS_PER_KEY[note_id] = -10
                         TOTAL_POINTS += POINTS_PER_KEY[note_id]
 
-            draw.draw_points(img, int(TOTAL_POINTS))
+            TOTAL_POINTS = int(TOTAL_POINTS) if TOTAL_POINTS >= 0 else 0
+            draw.draw_points(img, TOTAL_POINTS)
             draw.draw_streak(img, STREAK)
 
             cv2.imshow("Test", img)
