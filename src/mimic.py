@@ -88,99 +88,103 @@ if __name__ == "__main__":
     TOTAL_POINTS = 0
     STREAK = 0
 
-    with mido.open_input() as inport:
-        while not QUEUE.empty():
-            FRAME_BEFORE = time()
-            (img, frame_events) = QUEUE.get()
-            for MSG in inport.iter_pending():
-                PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
-                if PARSED_OBJ is not None:
-                    KEYS_HELD[PARSED_OBJ["key"]] = PARSED_OBJ["down"]
+    try:
+        with mido.open_input() as inport:
+            while not QUEUE.empty():
+                FRAME_BEFORE = time()
+                (img, frame_events) = QUEUE.get()
+                for MSG in inport.iter_pending():
+                    PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
+                    if PARSED_OBJ is not None:
+                        KEYS_HELD[PARSED_OBJ["key"]] = PARSED_OBJ["down"]
 
-            for note_id in range(88):
-                frame_reshaped = [x[note_id] for x in frame_events]
-                if any(frame_reshaped):
-                    if NOTES_RESET[note_id]:
-                        NOTES_RESET[note_id] = False
-                        TOTAL_NOTES += 1
-                    press_evnt = 0
-                    for evnt in frame_reshaped:
-                        if evnt != 0:
-                            press_evnt = evnt
-                    if POINTS_PER_KEY[note_id] < 0:
-                        POINTS_PER_KEY[note_id] = 0
-                    if KEY_GRACE[note_id] < FRAME_TOLERANCE:
-                        if press_evnt > 0 and KEYS_HELD[note_id]:
-                            draw.draw_correct_note(img, note_id, KEY_POS)
-                            if POINTS_PER_KEY[note_id] == 0:
+                for note_id in range(88):
+                    frame_reshaped = [x[note_id] for x in frame_events]
+                    if any(frame_reshaped):
+                        if NOTES_RESET[note_id]:
+                            NOTES_RESET[note_id] = False
+                            TOTAL_NOTES += 1
+                        press_evnt = 0
+                        for evnt in frame_reshaped:
+                            if evnt != 0:
+                                press_evnt = evnt
+                        if POINTS_PER_KEY[note_id] < 0:
+                            POINTS_PER_KEY[note_id] = 0
+                        if KEY_GRACE[note_id] < FRAME_TOLERANCE:
+                            if press_evnt > 0 and KEYS_HELD[note_id]:
+                                draw.draw_correct_note(img, note_id, KEY_POS)
+                                if POINTS_PER_KEY[note_id] == 0:
+                                    POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
+                                    HITS += 1
+                                    STREAK += 1
+                                    TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                                DRAW_EVENT[note_id] = True
+                                KEY_GRACE[note_id] = 0
+                            elif press_evnt < 0 and not KEYS_HELD[note_id] and DRAW_EVENT[note_id]:
                                 POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
-                                HITS += 1
-                                STREAK += 1
                                 TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                            DRAW_EVENT[note_id] = True
-                            KEY_GRACE[note_id] = 0
-                        elif press_evnt < 0 and not KEYS_HELD[note_id] and DRAW_EVENT[note_id]:
-                            POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
+                                DRAW_EVENT[note_id] = False
+                                NOTE_OVER[note_id] = True
+                                KEY_GRACE[note_id] = 0
+                                STREAK += 1
+                                HITS += 1
+                        if press_evnt > 0:
+                            NOTE_OVER[note_id] = False
+                        elif not NOTE_OVER[note_id]:
+                            POINTS_PER_KEY[note_id] = -10
                             TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                            DRAW_EVENT[note_id] = False
                             NOTE_OVER[note_id] = True
                             KEY_GRACE[note_id] = 0
-                            STREAK += 1
-                            HITS += 1
-                    if press_evnt > 0:
-                        NOTE_OVER[note_id] = False
-                    elif not NOTE_OVER[note_id]:
-                        POINTS_PER_KEY[note_id] = -10
-                        TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                        NOTE_OVER[note_id] = True
-                        KEY_GRACE[note_id] = 0
-                    if not NOTE_OVER[note_id]:
-                        KEY_GRACE[note_id] += 1
-                else:
-                    NOTES_RESET[note_id] = True
-                if KEY_GRACE[note_id] >= FRAME_TOLERANCE and not NOTE_OVER[note_id]:
-                    draw.draw_wrong_note(img, note_id, KEY_POS)
-                    if POINTS_PER_KEY[note_id] == 0:
-                        STREAK = 0
-                        POINTS_PER_KEY[note_id] = -10
-                        TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                elif DRAW_EVENT[note_id]:
-                    if DRAW_EVENT[note_id] > 0 and KEYS_HELD[note_id]:
-                        KEY_GRACE[note_id] = 0
-                        draw.draw_correct_note(img, note_id, KEY_POS)
+                        if not NOTE_OVER[note_id]:
+                            KEY_GRACE[note_id] += 1
                     else:
-                        KEY_GRACE[note_id] += 1
-                        if KEY_GRACE[note_id] >= FRAME_TOLERANCE:
-                            draw.draw_wrong_note(img, note_id, KEY_POS)
-                            if POINTS_PER_KEY[note_id] == 0:
-                                STREAK = 0
-                                POINTS_PER_KEY[note_id] = -10
-                                TOTAL_POINTS += POINTS_PER_KEY[note_id]
-                                if NOTE_OVER[note_id]:
-                                    KEY_GRACE[note_id] = 0
-                                    DRAW_EVENT[note_id] = False
-                elif KEYS_HELD[note_id]:
-                    draw.draw_wrong_note(img, note_id, KEY_POS)
-                    if POINTS_PER_KEY[note_id] == 0:
-                        STREAK = 0
-                        POINTS_PER_KEY[note_id] = -10
-                        TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                        NOTES_RESET[note_id] = True
+                    if KEY_GRACE[note_id] >= FRAME_TOLERANCE and not NOTE_OVER[note_id]:
+                        draw.draw_wrong_note(img, note_id, KEY_POS)
+                        if POINTS_PER_KEY[note_id] == 0:
+                            STREAK = 0
+                            POINTS_PER_KEY[note_id] = -10
+                            TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                    elif DRAW_EVENT[note_id]:
+                        if DRAW_EVENT[note_id] > 0 and KEYS_HELD[note_id]:
+                            KEY_GRACE[note_id] = 0
+                            draw.draw_correct_note(img, note_id, KEY_POS)
+                        else:
+                            KEY_GRACE[note_id] += 1
+                            if KEY_GRACE[note_id] >= FRAME_TOLERANCE:
+                                draw.draw_wrong_note(img, note_id, KEY_POS)
+                                if POINTS_PER_KEY[note_id] == 0:
+                                    STREAK = 0
+                                    POINTS_PER_KEY[note_id] = -10
+                                    TOTAL_POINTS += POINTS_PER_KEY[note_id]
+                                    if NOTE_OVER[note_id]:
+                                        KEY_GRACE[note_id] = 0
+                                        DRAW_EVENT[note_id] = False
+                    elif KEYS_HELD[note_id]:
+                        draw.draw_wrong_note(img, note_id, KEY_POS)
+                        if POINTS_PER_KEY[note_id] == 0:
+                            STREAK = 0
+                            POINTS_PER_KEY[note_id] = -10
+                            TOTAL_POINTS += POINTS_PER_KEY[note_id]
 
-            TOTAL_POINTS = int(TOTAL_POINTS) if TOTAL_POINTS >= 0 else 0
-            draw.draw_points(img, TOTAL_POINTS)
-            draw.draw_streak(img, STREAK)
-            draw.draw_hits(img, HITS, TOTAL_NOTES)
+                TOTAL_POINTS = int(TOTAL_POINTS) if TOTAL_POINTS >= 0 else 0
+                draw.draw_points(img, TOTAL_POINTS)
+                draw.draw_streak(img, STREAK)
+                draw.draw_hits(img, HITS, TOTAL_NOTES)
 
-            cv2.imshow("Test", img)
+                cv2.imshow("Test", img)
 
-            FRAME_TIME = (time() - FRAME_BEFORE) * 1000
+                FRAME_TIME = (time() - FRAME_BEFORE) * 1000
 
-            SLEEP = 1
-            if FRAME_TIME < MS_PER_FRAME:
-                SLEEP = (MS_PER_FRAME - FRAME_TIME) / SPEED
+                SLEEP = 1
+                if FRAME_TIME < MS_PER_FRAME:
+                    SLEEP = (MS_PER_FRAME - FRAME_TIME) / SPEED
 
-            KEY = cv2.waitKey(int(SLEEP))
-            if KEY == ord('q'):
-                cv2.destroyAllWindows()
-                p.terminate()
-                break
+                KEY = cv2.waitKey(int(SLEEP))
+                if KEY == ord('q'):
+                    cv2.destroyAllWindows()
+                    break
+    except OSError:
+        print("Error: No digital piano detected, please connect one.")
+    finally:
+        p.terminate()
