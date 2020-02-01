@@ -80,8 +80,11 @@ if __name__ == "__main__":
     KEYS_HELD = [False] * 88
     DRAW_EVENT = [False] * 88
     NOTE_OVER = [False] * 88
+    NOTES_RESET = [True] * 88
     POINTS_PER_KEY = [0] * 88
     BASE_REWARD = 5
+    HITS = 0
+    TOTAL_NOTES = 0
     TOTAL_POINTS = 0
     STREAK = 0
 
@@ -97,6 +100,9 @@ if __name__ == "__main__":
             for note_id in range(88):
                 frame_reshaped = [x[note_id] for x in frame_events]
                 if any(frame_reshaped):
+                    if NOTES_RESET[note_id]:
+                        NOTES_RESET[note_id] = False
+                        TOTAL_NOTES += 1
                     press_evnt = 0
                     for evnt in frame_reshaped:
                         if evnt != 0:
@@ -108,6 +114,7 @@ if __name__ == "__main__":
                             draw.draw_correct_note(img, note_id, KEY_POS)
                             if POINTS_PER_KEY[note_id] == 0:
                                 POINTS_PER_KEY[note_id] = BASE_REWARD * (FRAME_TOLERANCE - KEY_GRACE[note_id])
+                                HITS += 1
                                 STREAK += 1
                                 TOTAL_POINTS += POINTS_PER_KEY[note_id]
                             DRAW_EVENT[note_id] = True
@@ -119,6 +126,7 @@ if __name__ == "__main__":
                             NOTE_OVER[note_id] = True
                             KEY_GRACE[note_id] = 0
                             STREAK += 1
+                            HITS += 1
                     if press_evnt > 0:
                         NOTE_OVER[note_id] = False
                     elif not NOTE_OVER[note_id]:
@@ -128,6 +136,8 @@ if __name__ == "__main__":
                         KEY_GRACE[note_id] = 0
                     if not NOTE_OVER[note_id]:
                         KEY_GRACE[note_id] += 1
+                else:
+                    NOTES_RESET[note_id] = True
                 if KEY_GRACE[note_id] >= FRAME_TOLERANCE and not NOTE_OVER[note_id]:
                     draw.draw_wrong_note(img, note_id, KEY_POS)
                     if POINTS_PER_KEY[note_id] == 0:
@@ -159,6 +169,7 @@ if __name__ == "__main__":
             TOTAL_POINTS = int(TOTAL_POINTS) if TOTAL_POINTS >= 0 else 0
             draw.draw_points(img, TOTAL_POINTS)
             draw.draw_streak(img, STREAK)
+            draw.draw_hits(img, HITS, TOTAL_NOTES)
 
             cv2.imshow("Test", img)
 

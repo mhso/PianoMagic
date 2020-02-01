@@ -184,16 +184,35 @@ def draw_wrong_note(img, note_id, key_pos):
 def end_of_data(timestamp, key_data):
     return timestamp > key_data[-1]["timestamp"]
 
-def draw_str(img, x, text):
-    cv2.putText(img, text, (x, 50), cv2.FONT_HERSHEY_COMPLEX, 1.5, (0, 0, 0), 8)
-    cv2.putText(img, text, (x, 50), cv2.FONT_HERSHEY_COMPLEX, 1.5, (255, 255, 255), 2)
+def draw_str(img, x, y, text, color=(255, 255, 255), size=1.5):
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_COMPLEX, size, (0, 0, 0), 8)
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_COMPLEX, size, color, 2)
 
 def draw_points(img, points):
     w = img.shape[1]
     pt_str = "Score: " + str(points)
-    x = w - len(pt_str) * 30
-    draw_str(img, x, pt_str)
+    x = w - len(pt_str) * 27 - 20
+    draw_str(img, x, 50, pt_str)
 
 def draw_streak(img, streak):
-    pt_str = "Streak: " + str(streak)
-    draw_str(img, 20, pt_str)
+    as_str = "Streak: " + str(streak)
+    draw_str(img, 20, 50, as_str)
+
+def draw_accuracy(img, accuracy):
+    as_str = "Acc: " + str(accuracy) + "%"
+    draw_str(img, 20, 100, as_str, size=1.2)
+
+def draw_hits(img, hits, total):
+    str_1 = str(hits)
+    str_2 = "/"
+    str_3 = str(total)
+    w = img.shape[1]
+    space_per_char = 25
+    x_1 = w - len(str_1 + str_2 + str_3) * space_per_char - 20
+    x_2 = w - len(str_1 + str_2) * space_per_char - 20
+    x_3 = w - len(str_1) * space_per_char - 20
+    draw_str(img, x_1, 100, str_1, color=(0, 190, 0), size=1.2)
+    draw_str(img, x_2, 100, str_2, size=1.2)
+    draw_str(img, x_3, 100, str_3, size=1.2)
+    if total > 0:
+        draw_accuracy(img, int((hits / total) * 100))
