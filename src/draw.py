@@ -122,7 +122,14 @@ def draw_key(img, x, x_1, x_2, any_pressed, is_sharp, press_color=(205, 120, 70)
     if not is_sharp:
         cv2.line(img, (x, view_height), (x, y_unp), (0, 0, 0))
 
-def draw_piano(statuses, key_pos, size, draw_presses=True):
+def draw_progress(img, progress):
+    length = int(img.shape[1] * progress)
+    y = 5
+    thickness = y * 2
+    cv2.line(img, (0, y), (length, y), (0, 0, 255), thickness)
+    cv2.line(img, (0, thickness), (length, thickness), (0, 0, 0), 1)
+
+def draw_piano(statuses, key_pos, size, progress, draw_presses=True):
     img = np.full((size[1], size[0], 3), BG_COLOR, dtype="uint8")
     h, w = img.shape[:2]
     key_thickness = w // KEY_WIDTH_FRAC
@@ -139,6 +146,7 @@ def draw_piano(statuses, key_pos, size, draw_presses=True):
         draw_key(img, x, x_1, x_2, any_pressed and draw_presses, is_sharp)
 
     cv2.line(img, (0, view_height-2), (w, view_height-2), (0, 0, 0), 2)
+    draw_progress(img, progress)
     return img
 
 def find_key(key, key_pos):

@@ -51,13 +51,15 @@ if __name__ == "__main__":
     QUEUE = Queue(int(BUFFER_SIZE))
     t = Thread(target=writer_loop, args=(WRITER, QUEUE))
     t.start()
+    TOTAL_FRAMES = int(DATA[-1]["timestamp"] * FPS)
     FRAMES = 0
+    RENDER_TIME = time()
 
     try:
         while not draw.end_of_data(TIMESTAMP, DATA):
             ACTIVE_KEYS, EVENTS = draw.get_key_statuses(TIMESTAMP, KEY_EVENTS)
 
-            FRAME = draw.draw_piano(ACTIVE_KEYS, KEY_POS, SIZE)
+            FRAME = draw.draw_piano(ACTIVE_KEYS, KEY_POS, SIZE, FRAMES / TOTAL_FRAMES)
             QUEUE.put(FRAME, True)
 
             TIMESTAMP += TIMESTEP
@@ -68,15 +70,16 @@ if __name__ == "__main__":
                     TIME_LEFT = new_time_left
                 prog_str = "#" * PROGRESS
                 remain_str = "_" * (INDICATORS - PROGRESS)
-                print("[" + prog_str + remain_str + "] (" + str(int(PROGRESS * (100 / INDICATORS))) +
-                    "%) " + str(int(TIME_LEFT)) + " s.", end=" ", flush=True)
+                print("[" + prog_str + remain_str + "] (" +
+                      str(int(PROGRESS * (100 / INDICATORS))) +
+                      "%) " + str(int(TIME_LEFT)) + " s.", end=" ", flush=True)
                 print("\r", end="")
             FRAMES += 1
 
         print("[" + ("#" * INDICATORS) + "] (100%) 0s")
-        print(f"Rendered video to file '{OUTPUT_FILE}'")
-        print(FRAMES / TIMESTAMP)
     finally:
         QUEUE.put(None)
         t.join()
+        print(f"Rendered video to file '{OUTPUT_FILE}'")
+        print(f"Rendering took {(time() - RENDER_TIME):.2f} seconds.")
         WRITER.release()

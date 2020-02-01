@@ -18,12 +18,13 @@ def filter_events(key_events, prev_presses):
                 prev_presses[note] = False
     return filtered, prev_presses
 
-def render_buffered(data, key_events, key_pos, size, timestep, queue, tolerance):
+def render_buffered(data, key_events, key_pos, size, timestep, queue, tolerance, total_frames):
     timestamp = 0
 
     prev_press = [False for _ in range(88)]
 
     headstart = 5
+    frames = 0
     offset = []
     images = []
 
@@ -35,12 +36,14 @@ def render_buffered(data, key_events, key_pos, size, timestep, queue, tolerance)
             if len(offset) > tolerance:
                 offset.pop(0)
 
-            image = draw.draw_piano(key_statuses, key_pos, size, draw_presses=False)
+            image = draw.draw_piano(key_statuses, key_pos, size,
+                                    frames / total_frames, draw_presses=False)
             if len(images) < headstart:
                 images.append(image)
                 image = images.pop(0)
             timestamp += timestep
             queue.put((image, [x for x in offset]), timeout=3)
+            frames += 1
     except Exception as e:
         print(e)
         print("Queue 'put' timed out.")
@@ -57,6 +60,7 @@ if __name__ == "__main__":
     SPEED = float(util.get_kw_value("speed", 1))
     KEY_POS = draw.calculate_key_positions(SIZE[0])
     TIMESTEP = 1 / FPS
+    TOTAL_FRAMES = int(DATA[-1]["timestamp"] * FPS)
 
     BUFFER_SIZE = min(300 * ((1920 * 1080) / (SIZE[0] * SIZE[1])), len(DATA))
     QUEUE = Queue(int(BUFFER_SIZE))
@@ -64,7 +68,7 @@ if __name__ == "__main__":
 
     print("Preparing...")
 
-    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE))
+    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE, TOTAL_FRAMES))
     p.start()
 
     while QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.
@@ -82,7 +86,6 @@ if __name__ == "__main__":
     STREAK = 0
 
     with mido.open_input() as inport:
-        FRAME = 0
         while not QUEUE.empty():
             FRAME_BEFORE = time()
             (img, frame_events) = QUEUE.get()
@@ -170,5 +173,3 @@ if __name__ == "__main__":
                 cv2.destroyAllWindows()
                 p.terminate()
                 break
-
-            FRAME += 1
