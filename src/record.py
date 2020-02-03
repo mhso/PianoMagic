@@ -5,32 +5,6 @@ from sys import argv
 import mido
 import util
 
-def create_note_list():
-    notes = []
-    sharp_distances = [1, 2, 1, 2, 1]
-    last_sharp = 0
-    sharp_index = 0
-    key_index = 0
-    for _ in range(88):
-        if last_sharp == sharp_distances[sharp_index % 5]:
-            letter = notes[-1] + "#"
-            sharp_index += 1
-            last_sharp = 0
-        else:
-            key_numerical = key_index % 7
-            letter = chr(key_numerical+65) + str(key_index // 7 + 1)
-            key_index += 1
-            last_sharp += 1
-        notes.append(letter)
-    return notes
-
-NOTES = create_note_list()
-
-def get_note(note_id):
-    return NOTES[note_id - 21]
-
-create_note_list()
-
 RECORD = "-r" in argv
 PATH = "../resources/recorded/"
 NUM_FILES = len(glob(PATH + "*.bin"))
@@ -46,7 +20,7 @@ try:
             if PARSED_OBJ is not None and RECORD:
                 RECORDED_NOTES.append(PARSED_OBJ)
 
-                NOTE = get_note(MSG.note)
+                NOTE = util.get_note_desc(MSG.note)
                 if MSG.velocity > 0:
                     print(f"{NOTE} up")
                 else:

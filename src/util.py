@@ -52,3 +52,32 @@ def parse_midi_msg(msg, time_started):
             velocity = msg.velocity
         rec_obj = create_record_obj(is_down, velocity, key, timestamp)
     return rec_obj
+
+def create_note_list():
+    notes = []
+    sharps = []
+    sharp_distances = [1, 2, 1, 2, 1]
+    last_sharp = 0
+    sharp_index = 0
+    key_index = 0
+    for i in range(88):
+        if last_sharp == sharp_distances[sharp_index % 5]:
+            letter = notes[-1] + "#"
+            sharps.append(i)
+            sharp_index += 1
+            last_sharp = 0
+        else:
+            key_numerical = key_index % 7
+            letter = chr(key_numerical+65) + str(key_index // 7 + 1)
+            key_index += 1
+            last_sharp += 1
+        notes.append(letter)
+    return notes, sharps
+
+NOTES, SHARPS = create_note_list()
+
+def get_note_desc(note_id):
+    return NOTES[note_id - 21]
+
+def is_sharp(note_id):
+    return note_id in SHARPS
