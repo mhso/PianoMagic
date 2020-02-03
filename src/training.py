@@ -74,14 +74,12 @@ def draw_note(img, key_index, treble, sharp, color=None):
     draw_semitone(img, x, y, treble, key_index, color)
     if sharp:
         draw_sharp(img, x-30, y)
-    name = "Treble clef" if treble else "Bass clef"
-    text_x = (img.shape[1] // 2 - 100)
-    text_y = 150
-    cv2.putText(img, f"Note is {name}", (text_x, text_y), cv2.QT_FONT_NORMAL, 1, (0, 0, 0), 2)
+    # name = "Treble clef" if treble else "Bass clef"
+    # text_x = (img.shape[1] // 2 - 100)
+    # text_y = 150
+    # cv2.putText(img, f"Note is {name}", (text_x, text_y), cv2.QT_FONT_NORMAL, 1, (0, 0, 0), 2)
 
 def overlay_img(img_1, img_2, x, y):
-    h, w = img_2.shape[:2]
-
     y1, y2 = y, y + img_2.shape[0]
     x1, x2 = x, x + img_2.shape[1]
 
@@ -109,20 +107,35 @@ def create_image(size):
         cv2.line(img, (x, int(h / 2 - (4 * SPACE_BETWEEN + VERTICAL_GAP))),
                  (x, int(h / 2 + (4 * SPACE_BETWEEN + VERTICAL_GAP))), (0, 0, 0), 2)
 
-    treb_clef_img = cv2.resize(cv2.imread("../resources/img/treble-clef.png", -1), (72, 172))
-    bass_clef_img = cv2.resize(cv2.imread("../resources/img/bass-clef.png", -1), (82, 82))
+    treb_clef_img = cv2.imread("../resources/img/treble-clef.png", -1)
+    treb_clef_img = cv2.resize(treb_clef_img, (62, int(SPACE_BETWEEN*6.8)))
+    bass_clef_img = cv2.imread("../resources/img/bass-clef.png", -1)
+    bass_clef_img = cv2.resize(bass_clef_img, (62, int(SPACE_BETWEEN*3.1)))
     img = overlay_img(img, treb_clef_img, PADDING_X + 10, int(h / 2 - SPACE_BETWEEN * 7.25))
-    img = overlay_img(img, bass_clef_img, PADDING_X + 5, int(h / 2 + SPACE_BETWEEN * 1.95))
+    img = overlay_img(img, bass_clef_img, PADDING_X + 10, int(h / 2 + SPACE_BETWEEN * 2))
 
     return img
+
+def get_countdown_color(progress):
+    r_lo = 30
+    g_lo = 80
+    b_lo = 200
+    r_hi = 220
+    g_hi = 20
+    b_hi = 30
+    red = r_lo + (r_hi - r_lo) * progress
+    green = g_lo + (g_hi - g_lo) * progress
+    blue = b_lo + (b_hi - b_lo) * progress
+    return (blue, green, red)
 
 def draw_countdown(img, progress):
     offset_x = PADDING_X
     max_width = img.shape[1] - (PADDING_X * 2)
     width = int(progress * max_width)
-    y = int(img.shape[0] - PADDING_X * 2)
+    y = int(img.shape[0] - PADDING_X)
+    color = get_countdown_color(progress)
     cv2.line(img, (offset_x, y), (img.shape[1] - offset_x, y), (0, 0, 0), 12)
-    cv2.line(img, (offset_x, y), (offset_x + width, y), (200, 80, 30), 10)
+    cv2.line(img, (offset_x, y), (offset_x + width, y), color, 10)
 
 def wait_for_input(img, port, note, timelimit):
     elapsed_time = 0
@@ -144,11 +157,11 @@ def wait_for_input(img, port, note, timelimit):
         draw_countdown(img, elapsed_time / timelimit)
     return "out_of_time", 0
 
-def draw_points(img, correct, total):
+def draw_score(img, correct, total):
     point_str = "Score: " + str(correct) + "/" + str(total)
     x = img.shape[1] // 2 - (len(point_str) * 17)
-    y = PADDING_X * 2
-    cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 5)
+    y = img.shape[0] // 6
+    cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 4)
 
 SIZE = (1280, 720)
 CORRECT = 0
@@ -157,7 +170,6 @@ QUESTIONS = 200
 def generate_question(q_number):
     duration = 6 - (q_number / QUESTIONS) * 4
     is_treble = random.random() > 0.5
-    key = 0
     if is_treble:
         choices = [x for x in range(30, 88)]
         weights = np.array([2 if x > 60 else 1 for x in choices])
@@ -165,8 +177,8 @@ def generate_question(q_number):
         choices = [x for x in range(0, 59)]
         weights = np.array([2 if x > 30 else 1 for x in choices])
     weights = weights / sum(weights)
-    key = np.random.choice(choices, size=1, p=weights)
-    return key[0], is_treble, duration
+    note = np.random.choice(choices, size=1, p=weights)[0]
+    return note, is_treble, duration
 
 # test_key = 43
 # print(util.get_note_desc(test_key))
@@ -176,26 +188,29 @@ def generate_question(q_number):
 # cv2.imshow("Piano Quiz", IMAGE)
 # key = cv2.waitKey(0)
 
-with mido.open_input() as inport:
-    for question in range(QUESTIONS):
-        KEY, TREBLE, LIMIT = generate_question(question)
-        IMAGE = create_image(SIZE)
-        draw_points(IMAGE, CORRECT, question+1)
-        IS_SHARP = util.is_sharp(KEY)
-        SHEET_NOTE = to_sheet_key(KEY)
-        draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP)
-        status, key = wait_for_input(IMAGE, inport, KEY, LIMIT*1000)
-        if status == "correct":
-            draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 255, 0))
-            CORRECT += 1
-        elif status == "wrong":
-            draw_note(IMAGE, to_sheet_key(key), TREBLE, IS_SHARP, (0, 0, 255))
-        elif status == "quit":
-            break
-        else:
-            print("TIME RAN OUT!")
+try:
+    with mido.open_input() as inport:
+        for question in range(QUESTIONS):
+            KEY, TREBLE, LIMIT = generate_question(question)
+            IMAGE = create_image(SIZE)
+            draw_score(IMAGE, CORRECT, question+1)
+            IS_SHARP = util.is_sharp(KEY)
+            SHEET_NOTE = to_sheet_key(KEY)
+            draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP)
+            STATUS, NOLTE = wait_for_input(IMAGE, inport, KEY, LIMIT*1000)
+            if STATUS == "correct":
+                draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 255, 0))
+                CORRECT += 1
+            elif STATUS == "wrong":
+                draw_note(IMAGE, to_sheet_key(NOLTE), TREBLE, IS_SHARP, (0, 0, 255))
+            elif STATUS == "quit":
+                break
+            else:
+                draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 0, 255))
 
-        cv2.imshow("Piano Quiz", IMAGE)
-        key = cv2.waitKey(1500)
-        if key == ord('q'):
-            break
+            cv2.imshow("Piano Quiz", IMAGE)
+            KEY = cv2.waitKey(1500)
+            if KEY == ord('q'):
+                break
+except OSError:
+    print("Error: No digital piano detected, please connect one.")
