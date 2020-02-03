@@ -38,7 +38,7 @@ def create_record_obj(down, velocity, key, timestamp):
 
 def parse_midi_msg(msg, time_started):
     rec_obj = None
-    if msg.type != "clock":
+    if msg is not None and msg.type != "clock":
         rec_obj = {
             "down": True,
             "velocity": 0,
@@ -77,7 +77,7 @@ def create_note_list():
 NOTES, SHARPS = create_note_list()
 
 def get_note_desc(note_id):
-    return NOTES[note_id - 21]
+    return NOTES[note_id]
 
 def is_sharp(note_id):
     return note_id in SHARPS

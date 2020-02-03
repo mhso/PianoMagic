@@ -1,11 +1,12 @@
+import random
 import mido
 import numpy as np
 import cv2
 import util
 
 BG_COLOR = 185
-VERTICAL_GAP = 50
-SPACE_BETWEEN = 25
+VERTICAL_GAP = 40
+SPACE_BETWEEN = 20
 PADDING_X = 50
 
 def convert_key(key_index, up):
@@ -46,24 +47,37 @@ def draw_sharp(img, x, y):
     cv2.line(img, (x + vert_offset_x, y - vert_offset_y - vert_offset),
              (x + vert_offset_x, y + vert_offset_y), (0, 0, 0), 2)
 
-def draw_semitone(img, x, y, bass):
-    cv2.ellipse(img, (x, y), (14, SPACE_BETWEEN // 2 - 2), 325, 0, 360, (0, 0, 0), -1)
-    offset_y = 1 if bass else -1
-    offset_x = 11 if bass else -10
-    cv2.line(img, (x+offset_x, y-(SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), (0, 0, 0), 3)
+def draw_semitone(img, x, y, treble, index, color):
+    note_color = (0, 0, 0) if color is None else color
+    y_radius = SPACE_BETWEEN // 2
+    cv2.ellipse(img, (x, y), (int(y_radius * 1.4), y_radius), 325, 0, 360, note_color, -1)
+    offset_x, offset_y = 1, 11
+    if treble:
+        threshold = 31
+        offset_y = -1 if index > threshold else 1
+        offset_x = -11 if index > threshold else 10
+    else:
+        threshold = 16
+        offset_y = 1 if index < threshold else -1
+        offset_x = 11 if index < threshold else -10
+    cv2.line(img, (x+offset_x, y-(SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), color, 3)
 
-def draw_note(img, key_index, bass, sharp):
+def draw_note(img, key_index, treble, sharp, color=None):
     x = 200
-    offset = VERTICAL_GAP // 2 if bass else -VERTICAL_GAP // 2
+    offset = -VERTICAL_GAP // 2 if treble else VERTICAL_GAP // 2
     start_y = img.shape[0] // 2 + offset
     y = int(start_y + (23 - key_index) * (SPACE_BETWEEN / 2))
-    if ((bass and (key_index < 10 or key_index > 22))
-            or (not bass and (key_index < 25 or key_index > 34))):
+    if ((treble and (key_index < 25 or key_index > 34))
+            or (not treble and (key_index < 10 or key_index > 22))):
         line_y = y + 10 if key_index % 2 == 0 else y
         cv2.line(img, (x-15, line_y), (x+15, line_y), (0, 0, 0), 2)
-    draw_semitone(img, x, y, bass)
+    draw_semitone(img, x, y, treble, key_index, color)
     if sharp:
         draw_sharp(img, x-30, y)
+    name = "Treble clef" if treble else "Bass clef"
+    text_x = (img.shape[1] // 2 - 100)
+    text_y = 150
+    cv2.putText(img, f"Note is {name}", (text_x, text_y), cv2.QT_FONT_NORMAL, 1, (0, 0, 0), 2)
 
 def overlay_img(img_1, img_2, x, y):
     h, w = img_2.shape[:2]
@@ -102,48 +116,80 @@ def create_image(size):
 
     return img
 
-def wait_for_input(port, note, timelimit):
+def draw_countdown(img, progress):
+    offset_x = PADDING_X
+    max_width = img.shape[1] - (PADDING_X * 2)
+    width = int(progress * max_width)
+    y = int(img.shape[0] - PADDING_X)
+    cv2.line(img, (offset_x, y), (img.shape[1] - offset_x, y), (0, 0, 0), 12)
+    cv2.line(img, (offset_x, y), (offset_x + width, y), (200, 80, 30), 10)
+
+def wait_for_input(img, port, note, timelimit):
     waited_for = 0
     sleep_time = 10
-    while sleep_time < timelimit:
-        msg = port.receive(True)
+    while waited_for < timelimit:
+        msg = port.receive(False)
         parsed_msg = util.parse_midi_msg(msg, 0)
-        if parsed_msg is not None:
+        if parsed_msg is not None and parsed_msg["down"]:
             if parsed_msg["key"] == note:
-                return "correct"
-            return "wrong"
+                return "correct", parsed_msg["key"]
+            return "wrong", parsed_msg["key"]
+        cv2.imshow("Piano Quiz", IMAGE)
         key = cv2.waitKey(sleep_time)
         if key == ord('q'):
-            return "quit"
+            return "quit", 0
         waited_for += sleep_time
-    return "out_of_time"
+        draw_countdown(img, waited_for / timelimit)
+    return "out_of_time", 0
 
-# Draw notes, maybe with a countdown.
+def draw_points(img, correct, total):
+    point_str = "Score: " + str(correct) + "/" + str(total)
+    x = img.shape[1] // 2 - (len(point_str) * 17)
+    y = PADDING_X * 2
+    cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 5)
+
 SIZE = (1280, 720)
-# Key range = 0-51. (52 keys)
-# MID C = 23
+CORRECT = 0
+QUESTIONS = 200
 
-KEYS = [39, 42, 44, 48, 60, 34]
-BASSES = [True, True, False, True, True]
-TIMELIMITS = [5, 4, 4, 4, 3, 3]
+def generate_question(q_number):
+    duration = 6 - (q_number / QUESTIONS) * 4
+    is_treble = random.random() > 0.5
+    key = 0
+    if is_treble:
+        key = random.randint(34, 87)
+    else:
+        key = random.randint(0, 54)
+    return key, is_treble, duration
 
-IMAGE = create_image(SIZE)
-print(util.get_note_desc(KEYS[0]))
-draw_note(IMAGE, to_sheet_key(KEYS[0]), BASSES[0], util.is_sharp(KEYS[0]))
-cv2.imshow("Test", IMAGE)
-cv2.waitKey(0)
+# test_key = 43
+# print(util.get_note_desc(test_key))
+# IMAGE = create_image(SIZE)
+# draw_note(IMAGE, to_sheet_key(test_key), True, False)
+
+# cv2.imshow("Piano Quiz", IMAGE)
+# key = cv2.waitKey(0)
 
 with mido.open_input() as inport:
-    for KEY, BASS, LIMIT in zip(KEYS, BASSES, TIMELIMITS):
+    for question in range(QUESTIONS):
+        KEY, TREBLE, LIMIT = generate_question(question)
         IMAGE = create_image(SIZE)
-        draw_note(IMAGE, to_sheet_key(KEY), BASS, util.is_sharp(KEY))
-        cv2.imshow("Test", IMAGE)
-        status = wait_for_input(inport, KEY, LIMIT*1000)
+        draw_points(IMAGE, CORRECT, question+1)
+        IS_SHARP = util.is_sharp(KEY)
+        SHEET_NOTE = to_sheet_key(KEY)
+        draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP)
+        status, key = wait_for_input(IMAGE, inport, KEY, LIMIT*1000)
         if status == "correct":
-            print("Correct!")
-        elif result == "wrong":
-            print("WRONG ANSWER!")
-        elif result == "quit":
+            draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 255, 0))
+            CORRECT += 1
+        elif status == "wrong":
+            draw_note(IMAGE, to_sheet_key(key), TREBLE, IS_SHARP, (0, 0, 255))
+        elif status == "quit":
             break
         else:
             print("TIME RAN OUT!")
+
+        cv2.imshow("Piano Quiz", IMAGE)
+        key = cv2.waitKey(1500)
+        if key == ord('q'):
+            break
