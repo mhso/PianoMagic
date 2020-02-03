@@ -120,7 +120,7 @@ def draw_countdown(img, progress):
     offset_x = PADDING_X
     max_width = img.shape[1] - (PADDING_X * 2)
     width = int(progress * max_width)
-    y = int(img.shape[0] - PADDING_X)
+    y = int(img.shape[0] - PADDING_X * 2)
     cv2.line(img, (offset_x, y), (img.shape[1] - offset_x, y), (0, 0, 0), 12)
     cv2.line(img, (offset_x, y), (offset_x + width, y), (200, 80, 30), 10)
 
