@@ -125,12 +125,14 @@ def draw_countdown(img, progress):
     cv2.line(img, (offset_x, y), (offset_x + width, y), (200, 80, 30), 10)
 
 def wait_for_input(img, port, note, timelimit):
-    waited_for = 0
+    elapsed_time = 0
     sleep_time = 10
-    while waited_for < timelimit:
+    while elapsed_time < timelimit:
         msg = port.receive(False)
         parsed_msg = util.parse_midi_msg(msg, 0)
         if parsed_msg is not None and parsed_msg["down"]:
+            if elapsed_time < 300: # Prevent accidental double presses.
+                continue
             if parsed_msg["key"] == note:
                 return "correct", parsed_msg["key"]
             return "wrong", parsed_msg["key"]
@@ -138,8 +140,8 @@ def wait_for_input(img, port, note, timelimit):
         key = cv2.waitKey(sleep_time)
         if key == ord('q'):
             return "quit", 0
-        waited_for += sleep_time
-        draw_countdown(img, waited_for / timelimit)
+        elapsed_time += sleep_time
+        draw_countdown(img, elapsed_time / timelimit)
     return "out_of_time", 0
 
 def draw_points(img, correct, total):
@@ -157,10 +159,14 @@ def generate_question(q_number):
     is_treble = random.random() > 0.5
     key = 0
     if is_treble:
-        key = random.randint(34, 87)
+        choices = [x for x in range(30, 88)]
+        weights = np.array([2 if x > 60 else 1 for x in choices])
     else:
-        key = random.randint(0, 54)
-    return key, is_treble, duration
+        choices = [x for x in range(0, 59)]
+        weights = np.array([2 if x > 30 else 1 for x in choices])
+    weights = weights / sum(weights)
+    key = np.random.choice(choices, size=1, p=weights)
+    return key[0], is_treble, duration
 
 # test_key = 43
 # print(util.get_note_desc(test_key))
