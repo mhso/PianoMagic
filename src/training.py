@@ -141,15 +141,16 @@ def wait_for_input(img, port, note, timelimit):
     elapsed_time = 0
     sleep_time = 10
     while elapsed_time < timelimit:
-        msg = port.receive(False)
-        parsed_msg = util.parse_midi_msg(msg, 0)
-        if parsed_msg is not None and parsed_msg["down"]:
-            if elapsed_time < 300: # Prevent accidental double presses.
-                continue
-            if parsed_msg["key"] == note:
-                return "correct", parsed_msg["key"]
-            return "wrong", parsed_msg["key"]
-        cv2.imshow("Piano Quiz", IMAGE)
+        if port is not None:
+            msg = port.receive(False)
+            parsed_msg = util.parse_midi_msg(msg, 0)
+            if parsed_msg is not None and parsed_msg["down"]:
+                if elapsed_time < 300: # Prevent accidental double presses.
+                    continue
+                if parsed_msg["key"] == note:
+                    return "correct", parsed_msg["key"]
+                return "wrong", parsed_msg["key"]
+        cv2.imshow("Piano Quiz", img)
         key = cv2.waitKey(sleep_time)
         if key == ord('q'):
             return "quit", 0
@@ -164,7 +165,6 @@ def draw_score(img, correct, total):
     cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 4)
 
 SIZE = (1280, 720)
-CORRECT = 0
 QUESTIONS = 200
 
 def generate_question(q_number):
@@ -180,6 +180,31 @@ def generate_question(q_number):
     note = np.random.choice(choices, size=1, p=weights)[0]
     return note, is_treble, duration
 
+def training_loop(inport):
+    correct = 0
+    for question in range(QUESTIONS):
+        note, treble, limit = generate_question(question)
+        image = create_image(SIZE)
+        draw_score(image, correct, question+1)
+        is_sharp = util.is_sharp(note)
+        sheet_note = to_sheet_key(note)
+        draw_note(image, sheet_note, treble, is_sharp)
+        status, pressed_note = wait_for_input(image, inport, note, limit*1000)
+        if status == "correct":
+            draw_note(image, sheet_note, treble, is_sharp, (0, 255, 0))
+            correct += 1
+        elif status == "wrong":
+            draw_note(image, to_sheet_key(pressed_note), treble, is_sharp, (0, 0, 255))
+        elif status == "quit":
+            break
+        else:
+            draw_note(image, sheet_note, treble, is_sharp, (0, 0, 255))
+
+        cv2.imshow("Piano Quiz", image)
+        key = cv2.waitKey(1500)
+        if key == ord('q'):
+            break
+
 # test_key = 43
 # print(util.get_note_desc(test_key))
 # IMAGE = create_image(SIZE)
@@ -190,27 +215,7 @@ def generate_question(q_number):
 
 try:
     with mido.open_input() as inport:
-        for question in range(QUESTIONS):
-            KEY, TREBLE, LIMIT = generate_question(question)
-            IMAGE = create_image(SIZE)
-            draw_score(IMAGE, CORRECT, question+1)
-            IS_SHARP = util.is_sharp(KEY)
-            SHEET_NOTE = to_sheet_key(KEY)
-            draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP)
-            STATUS, NOLTE = wait_for_input(IMAGE, inport, KEY, LIMIT*1000)
-            if STATUS == "correct":
-                draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 255, 0))
-                CORRECT += 1
-            elif STATUS == "wrong":
-                draw_note(IMAGE, to_sheet_key(NOLTE), TREBLE, IS_SHARP, (0, 0, 255))
-            elif STATUS == "quit":
-                break
-            else:
-                draw_note(IMAGE, SHEET_NOTE, TREBLE, IS_SHARP, (0, 0, 255))
-
-            cv2.imshow("Piano Quiz", IMAGE)
-            KEY = cv2.waitKey(1500)
-            if KEY == ord('q'):
-                break
+        training_loop(inport)
 except OSError:
-    print("Error: No digital piano detected, please connect one.")
+    print("WARNING: No digital piano detected, please connect one.")
+    training_loop(None)
