@@ -1,4 +1,5 @@
 import random
+from time import time
 import mido
 import numpy as np
 import cv2
@@ -137,27 +138,6 @@ def draw_countdown(img, progress):
     cv2.line(img, (offset_x, y), (img.shape[1] - offset_x, y), (0, 0, 0), 12)
     cv2.line(img, (offset_x, y), (offset_x + width, y), color, 10)
 
-def wait_for_input(img, port, note, timelimit):
-    elapsed_time = 0
-    sleep_time = 10
-    while elapsed_time < timelimit:
-        if port is not None:
-            msg = port.receive(False)
-            parsed_msg = util.parse_midi_msg(msg, 0)
-            if parsed_msg is not None and parsed_msg["down"]:
-                if elapsed_time < 300: # Prevent accidental double presses.
-                    continue
-                if parsed_msg["key"] == note:
-                    return "correct", parsed_msg["key"]
-                return "wrong", parsed_msg["key"]
-        cv2.imshow("Piano Quiz", img)
-        key = cv2.waitKey(sleep_time)
-        if key == ord('q'):
-            return "quit", 0
-        elapsed_time += sleep_time
-        draw_countdown(img, elapsed_time / timelimit)
-    return "out_of_time", 0
-
 def draw_score(img, correct, total):
     point_str = "Score: " + str(correct) + "/" + str(total)
     x = img.shape[1] // 2 - (len(point_str) * 17)
@@ -167,51 +147,89 @@ def draw_score(img, correct, total):
 SIZE = (1280, 720)
 QUESTIONS = 200
 
-def generate_question(q_number):
+def generate_questions(q_number):
+    data = []
     duration = 6 - (q_number / QUESTIONS) * 4
-    is_treble = random.random() > 0.5
-    if is_treble:
-        choices = [x for x in range(30, 88)]
-        weights = np.array([2 if x > 60 else 1 for x in choices])
-    else:
-        choices = [x for x in range(0, 59)]
-        weights = np.array([2 if x > 30 else 1 for x in choices])
-    weights = weights / sum(weights)
-    note = np.random.choice(choices, size=1, p=weights)[0]
-    return note, is_treble, duration
+    amount = 5
+    for _ in range(amount):
+        is_treble = random.random() > 0.5
+        if is_treble:
+            choices = [x for x in range(30, 88)]
+            weights = np.array([2 if x > 60 else 1 for x in choices])
+        else:
+            choices = [x for x in range(0, 59)]
+            weights = np.array([2 if x > 30 else 1 for x in choices])
+        weights = weights / sum(weights)
+        note = np.random.choice(choices, size=1, p=weights)[0]
+        data.append((note, is_treble))
+    return data, duration
 
-def training_loop(inport):
+def get_input(port):
+    if port is not None:
+        msg = port.receive(False)
+        parsed_msg = util.parse_midi_msg(msg, 0)
+        if parsed_msg is not None and parsed_msg["down"]:
+            return parsed_msg["key"]
+    return None
+
+def animate_questions(img, notes, timelimit, port):
+    curr_note = 0
+    elapsed_time = 0
+    sleep_time = 10
     correct = 0
-    for question in range(QUESTIONS):
-        note, treble, limit = generate_question(question)
-        image = create_image(SIZE)
-        draw_score(image, correct, question+1)
+    statuses = [0 for _ in notes]
+    changed = [True for _ in notes]
+    while elapsed_time < timelimit and curr_note < len(notes):
+        before = time()
+        pressed_note = get_input(port)
+        if elapsed_time < 300:
+            pressed_note = None
+        for i, (note, is_treble) in enumerate(notes[curr_note:]):
+            is_sharp = util.is_sharp(note)
+            sheet_note = to_sheet_key(note)
+            color = None
+            if statuses[i] == 1:
+                color = (0, 255, 0)
+            elif statuses[i] == -1:
+                color = (0, 0, 255)
+            if changed[i]:
+                draw_note(img, sheet_note, is_treble, is_sharp, color)
+                changed[i] = False
+            if pressed_note is not None:
+                if pressed_note == note and i == curr_note:
+                    statuses[i] = 1
+                    correct += 1
+                    curr_note += 1
+                else:
+                    statuses[i] = -1
+                    curr_note += 1
+                changed[i] = True
+        draw_countdown(img, elapsed_time / timelimit)
+        cv2.imshow("Piano Quiz", img)
+        key = cv2.waitKey(sleep_time)
+        if key == ord('q'):
+            return correct, -1
+        elapsed_time += sleep_time
+    for note, is_treble in notes[curr_note:]:
         is_sharp = util.is_sharp(note)
         sheet_note = to_sheet_key(note)
-        draw_note(image, sheet_note, treble, is_sharp)
-        status, pressed_note = wait_for_input(image, inport, note, limit*1000)
-        if status == "correct":
-            draw_note(image, sheet_note, treble, is_sharp, (0, 255, 0))
-            correct += 1
-        elif status == "wrong":
-            draw_note(image, to_sheet_key(pressed_note), treble, is_sharp, (0, 0, 255))
-        elif status == "quit":
-            break
-        else:
-            draw_note(image, sheet_note, treble, is_sharp, (0, 0, 255))
+        draw_note(img, sheet_note, is_treble, is_sharp, (0, 0, 255))
+    return correct, 0
 
+def training_loop(port):
+    correct = 0
+    for question in range(QUESTIONS):
+        image = create_image(SIZE)
+        draw_score(image, correct, question+1)
+        notes, duration = generate_questions(question)
+        notes_correct, status = animate_questions(image, notes, duration*1000, port)
+        correct += notes_correct
+        if status == -1:
+            break
         cv2.imshow("Piano Quiz", image)
         key = cv2.waitKey(1500)
         if key == ord('q'):
             break
-
-# test_key = 43
-# print(util.get_note_desc(test_key))
-# IMAGE = create_image(SIZE)
-# draw_note(IMAGE, to_sheet_key(test_key), True, False)
-
-# cv2.imshow("Piano Quiz", IMAGE)
-# key = cv2.waitKey(0)
 
 try:
     with mido.open_input() as inport:
