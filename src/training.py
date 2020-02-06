@@ -140,7 +140,13 @@ def draw_score(img, correct, total):
     y = img.shape[0] // 6
     cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 4)
 
-SIZE = (1280, 720)
+def draw_out_of_time(img):
+    h, w = img.shape[:2]
+    cv2.putText(img, "Out of time!", (w // 2 - 300, h // 2 + 30),
+                cv2.QT_FONT_NORMAL, 3, (0, 0, 255), 5)
+
+SIZE_SPLIT = util.get_kw_value("size", "(1280,720)").split(",")
+SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
 QUESTIONS = 200
 
 def generate_questions(q_number):
@@ -225,7 +231,7 @@ def animate_questions(img, notes, timelimit, port):
         is_sharp = util.is_sharp(note)
         sheet_note = to_sheet_key(note)
         draw_pressed_notes(img, sheet_note, is_treble, is_sharp, statuses[i], pressed_notes[i], i)
-    return correct, 0
+    return correct, 1 if curr_note == len(notes) else 0
 
 def training_loop(port):
     correct = 0
@@ -235,8 +241,10 @@ def training_loop(port):
         draw_score(image, correct, question+len(notes))
         notes_correct, status = animate_questions(image, notes, duration*1000, port)
         correct += notes_correct
-        if status == -1:
+        if status == -1: # Quit.
             break
+        elif status == 0: # Out of time.
+            draw_out_of_time(image)
         cv2.imshow("Piano Quiz", image)
         key = cv2.waitKey(1500)
         if key == ord('q'):
