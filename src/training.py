@@ -9,6 +9,7 @@ BG_COLOR = 185
 VERTICAL_GAP = 40
 SPACE_BETWEEN = 20
 PADDING_X = 50
+DIFFICULTY = util.get_kw_value("diff", 2) # Difficulty ranges from 1-5
 
 def convert_key(key_index, up):
     sharp_distances = [1, 2, 1, 2, 1]
@@ -151,8 +152,12 @@ QUESTIONS = 200
 
 def generate_questions(q_number):
     data = []
-    duration = 6 - (q_number / QUESTIONS) * 4
-    amount = int(10 * (q_number / QUESTIONS)) + 1
+    duration_init = 12 - DIFFICULTY
+    duration_end = 7 - (DIFFICULTY // 2)
+    duration = duration_init - (q_number / QUESTIONS) * (duration_init - duration_end)
+    amount_init = DIFFICULTY
+    amount_end = 6 + DIFFICULTY
+    amount = int(amount_end * (q_number / QUESTIONS)) + amount_init
     for _ in range(amount):
         is_treble = random.random() > 0.5
         if is_treble:
@@ -249,6 +254,7 @@ def training_loop(port):
         key = cv2.waitKey(1500)
         if key == ord('q'):
             break
+    print(f"Training over! You hit '{correct}' correct notes out of a total of '{QUESTIONS}'.")
 
 try:
     with mido.open_input() as inport:
