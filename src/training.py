@@ -63,8 +63,8 @@ def draw_semitone(img, x, y, treble, index, color):
         offset_x = 11 if index < threshold else -10
     cv2.line(img, (x+offset_x, y-(SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), color, 3)
 
-def draw_note(img, key_index, treble, sharp, color=None):
-    x = 200
+def draw_note(img, offset, key_index, treble, sharp, color=None):
+    x = 200 + 50 * offset
     offset = -VERTICAL_GAP // 2 if treble else VERTICAL_GAP // 2
     start_y = img.shape[0] // 2 + offset
     y = int(start_y + (23 - key_index) * (SPACE_BETWEEN / 2))
@@ -193,7 +193,7 @@ def animate_questions(img, notes, timelimit, port):
             elif statuses[i] == -1:
                 color = (0, 0, 255)
             if changed[i]:
-                draw_note(img, sheet_note, is_treble, is_sharp, color)
+                draw_note(img, i, sheet_note, is_treble, is_sharp, color)
                 changed[i] = False
             if pressed_note is not None:
                 if pressed_note == note and i == curr_note:
@@ -210,10 +210,10 @@ def animate_questions(img, notes, timelimit, port):
         if key == ord('q'):
             return correct, -1
         elapsed_time += sleep_time
-    for note, is_treble in notes[curr_note:]:
+    for i, (note, is_treble) in enumerate(notes[curr_note:]):
         is_sharp = util.is_sharp(note)
         sheet_note = to_sheet_key(note)
-        draw_note(img, sheet_note, is_treble, is_sharp, (0, 0, 255))
+        draw_note(img, i, sheet_note, is_treble, is_sharp, (0, 0, 255))
     return correct, 0
 
 def training_loop(port):
