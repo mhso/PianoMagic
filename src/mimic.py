@@ -59,6 +59,7 @@ if __name__ == "__main__":
     SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
     SPEED = float(util.get_kw_value("speed", 1))
     KEY_POS = draw.calculate_key_positions(SIZE[0])
+    FREEZE_MODE = util.get_kw_value("freeze", False)
     TIMESTEP = 1 / FPS
     TOTAL_FRAMES = int(DATA[-1]["timestamp"] * FPS)
 
@@ -93,6 +94,13 @@ if __name__ == "__main__":
             while not QUEUE.empty():
                 FRAME_BEFORE = time()
                 (img, frame_events) = QUEUE.get()
+
+                while FREEZE_MODE and frame_events:
+                    MSG = inport.receive(True)
+                    PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
+                    if PARSED_OBJ is not None and PARSED_OBJ["key"] == frame_events[2][note_id]:
+                        break
+
                 for MSG in inport.iter_pending():
                     PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
                     if PARSED_OBJ is not None:
