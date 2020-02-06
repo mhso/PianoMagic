@@ -64,7 +64,7 @@ def draw_semitone(img, x, y, treble, index, color):
     cv2.line(img, (x+offset_x, y-(SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), color, 3)
 
 def draw_note(img, offset, key_index, treble, sharp, color=None):
-    x = 200 + 50 * offset
+    x = 200 + 70 * offset
     offset = -VERTICAL_GAP // 2 if treble else VERTICAL_GAP // 2
     start_y = img.shape[0] // 2 + offset
     y = int(start_y + (23 - key_index) * (SPACE_BETWEEN / 2))
@@ -75,10 +75,6 @@ def draw_note(img, offset, key_index, treble, sharp, color=None):
     draw_semitone(img, x, y, treble, key_index, color)
     if sharp:
         draw_sharp(img, x-30, y)
-    # name = "Treble clef" if treble else "Bass clef"
-    # text_x = (img.shape[1] // 2 - 100)
-    # text_y = 150
-    # cv2.putText(img, f"Note is {name}", (text_x, text_y), cv2.QT_FONT_NORMAL, 1, (0, 0, 0), 2)
 
 def overlay_img(img_1, img_2, x, y):
     y1, y2 = y, y + img_2.shape[0]
@@ -150,7 +146,7 @@ QUESTIONS = 200
 def generate_questions(q_number):
     data = []
     duration = 6 - (q_number / QUESTIONS) * 4
-    amount = 5
+    amount = int(10 * (q_number / QUESTIONS)) + 1
     for _ in range(amount):
         is_treble = random.random() > 0.5
         if is_treble:
@@ -167,10 +163,22 @@ def generate_questions(q_number):
 def get_input(port):
     if port is not None:
         msg = port.receive(False)
-        parsed_msg = util.parse_midi_msg(msg, 0)
+        parsed_msg = util.parse_midi_msg(msg, time())
         if parsed_msg is not None and parsed_msg["down"]:
             return parsed_msg["key"]
     return None
+
+def draw_pressed_notes(img, sheet_note, is_treble, is_sharp, status, pressed, index):
+    note_draw, treble_draw, sharp_draw = sheet_note, is_treble, is_sharp
+    color = None
+    if status == 1:
+        color = (0, 255, 0)
+    elif status == -1:
+        color = (0, 0, 255)
+        note_draw, treble_draw = pressed
+        sharp_draw = util.is_sharp(note_draw)
+        sheet_note = to_sheet_key(note_draw)
+    draw_note(img, index, sheet_note, treble_draw, sharp_draw, color)
 
 def animate_questions(img, notes, timelimit, port):
     curr_note = 0
@@ -179,49 +187,52 @@ def animate_questions(img, notes, timelimit, port):
     correct = 0
     statuses = [0 for _ in notes]
     changed = [True for _ in notes]
+    pressed_notes = [None for _ in notes]
+    last_note = time()
     while elapsed_time < timelimit and curr_note < len(notes):
         before = time()
         pressed_note = get_input(port)
-        if elapsed_time < 300:
+        if before - last_note < 0.5:
             pressed_note = None
-        for i, (note, is_treble) in enumerate(notes[curr_note:]):
+        for i, (note, is_treble) in enumerate(notes):
             is_sharp = util.is_sharp(note)
             sheet_note = to_sheet_key(note)
-            color = None
-            if statuses[i] == 1:
-                color = (0, 255, 0)
-            elif statuses[i] == -1:
-                color = (0, 0, 255)
             if changed[i]:
-                draw_note(img, i, sheet_note, is_treble, is_sharp, color)
+                draw_pressed_notes(img, sheet_note, is_treble,
+                                   is_sharp, statuses[i], pressed_notes[i], i)
                 changed[i] = False
-            if pressed_note is not None:
-                if pressed_note == note and i == curr_note:
+            if pressed_note is not None and i == curr_note:
+                last_note = time()
+                if pressed_note == note:
                     statuses[i] = 1
                     correct += 1
-                    curr_note += 1
                 else:
                     statuses[i] = -1
-                    curr_note += 1
+                curr_note += 1
                 changed[i] = True
+                pressed_notes[i] = (pressed_note, is_treble)
+                pressed_note = None
         draw_countdown(img, elapsed_time / timelimit)
+
         cv2.imshow("Piano Quiz", img)
-        key = cv2.waitKey(sleep_time)
+        real_time = (time() - before) * 1000
+        time_to_sleep = int(sleep_time - real_time) if real_time < sleep_time else sleep_time
+        key = cv2.waitKey(time_to_sleep)
         if key == ord('q'):
             return correct, -1
-        elapsed_time += sleep_time
-    for i, (note, is_treble) in enumerate(notes[curr_note:]):
+        elapsed_time += time_to_sleep
+    for i, (note, is_treble) in enumerate(notes):
         is_sharp = util.is_sharp(note)
         sheet_note = to_sheet_key(note)
-        draw_note(img, i, sheet_note, is_treble, is_sharp, (0, 0, 255))
+        draw_pressed_notes(img, sheet_note, is_treble, is_sharp, statuses[i], pressed_notes[i], i)
     return correct, 0
 
 def training_loop(port):
     correct = 0
     for question in range(QUESTIONS):
         image = create_image(SIZE)
-        draw_score(image, correct, question+1)
         notes, duration = generate_questions(question)
+        draw_score(image, correct, question+len(notes))
         notes_correct, status = animate_questions(image, notes, duration*1000, port)
         correct += notes_correct
         if status == -1:
