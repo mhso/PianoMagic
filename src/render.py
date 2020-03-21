@@ -1,4 +1,4 @@
-from time import time
+from time import time, sleep
 from queue import Queue
 from threading import Thread
 from glob import glob
@@ -9,10 +9,13 @@ import draw
 
 def writer_loop(writer, queue):
     while True:
-        frame = queue.get(True)
+        frame, prev_frame = queue.get(True)
         if frame is None:
             break
-        writer.write(FRAME)
+        frame_time = time() - prev_frame
+        if frame_time < FPS:
+            sleep(FPS - frame_time)
+        writer.write(frame)
 
 if __name__ == "__main__":
     INPUT_FILE = util.get_kw_value("in", mandatory=True)
@@ -36,9 +39,8 @@ if __name__ == "__main__":
 
     TIMESTEP = 1 / FPS
     TIMESTAMP = 0
-    STARTED = time()
     EVENTS = 0
-    INDICATORS = 50
+    PROGRESS_INDICATORS = 50
     PROGRESS = 0
     TIME_LEFT = (
         (DATA[-1]["timestamp"] - DATA[0]["timestamp"]) * 0.08
@@ -53,32 +55,35 @@ if __name__ == "__main__":
     t.start()
     TOTAL_FRAMES = int(DATA[-1]["timestamp"] * FPS)
     FRAMES = 0
+    STARTED = time()
     RENDER_TIME = time()
 
     try:
         while not draw.end_of_data(TIMESTAMP, DATA):
+            FRAME_TIME = time()
             ACTIVE_KEYS, EVENTS = draw.get_key_statuses(TIMESTAMP, KEY_EVENTS)
 
             FRAME = draw.draw_piano(ACTIVE_KEYS, KEY_POS, SIZE, FRAMES / TOTAL_FRAMES)
-            QUEUE.put(FRAME, True)
+            QUEUE.put((FRAME, time() - FRAME_TIME), True)
 
             TIMESTAMP += TIMESTEP
-            if int(EVENTS / len(DATA) * INDICATORS) > PROGRESS:
-                PROGRESS = int(EVENTS / len(DATA) * INDICATORS)
+            if int(EVENTS / len(DATA) * 100) > PROGRESS:
+                PROGRESS = int(EVENTS / len(DATA) * 100)
+                INDICATORS = int(PROGRESS / (100 / PROGRESS_INDICATORS))
                 new_time_left = ((time() - STARTED) / EVENTS) * (len(DATA) - EVENTS)
                 if new_time_left <= TIME_LEFT:
                     TIME_LEFT = new_time_left
-                prog_str = "#" * PROGRESS
-                remain_str = "_" * (INDICATORS - PROGRESS)
+                prog_str = "#" * INDICATORS
+                remain_str = "_" * (PROGRESS_INDICATORS - INDICATORS)
                 print("[" + prog_str + remain_str + "] (" +
-                      str(int(PROGRESS * (100 / INDICATORS))) +
+                      str(PROGRESS) +
                       "%) " + str(int(TIME_LEFT)) + " s.", end=" ", flush=True)
                 print("\r", end="")
             FRAMES += 1
 
         print("[" + ("#" * INDICATORS) + "] (100%) 0s")
     finally:
-        QUEUE.put(None)
+        QUEUE.put((None, None))
         t.join()
         print(f"Rendered video to file '{OUTPUT_FILE}'")
         print(f"Rendering took {(time() - RENDER_TIME):.2f} seconds.")
