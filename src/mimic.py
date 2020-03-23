@@ -30,7 +30,7 @@ def render_buffered(data, key_events, key_pos, size, timestep, queue, tolerance,
 
     try:
         while not draw.end_of_data(timestamp, data):
-            key_statuses, _ = draw.get_key_statuses(timestamp, key_events)
+            key_statuses, _ = util.get_key_statuses(timestamp, key_events)
             filtered, prev_press = filter_events(key_statuses, prev_press)
             offset.append(filtered)
             if len(offset) > tolerance:
@@ -54,22 +54,19 @@ if __name__ == "__main__":
     INPUT_NAME = "../resources/recorded/" + INPUT_FILE + ".bin"
     DATA, KEY_EVENTS = util.load_key_events(INPUT_NAME)
 
-    FPS = float(util.get_kw_value("fps", 30))
-    SIZE_SPLIT = util.get_kw_value("size", "(1920,1080)").split(",")
-    SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
     SPEED = float(util.get_kw_value("speed", 1))
-    KEY_POS = draw.calculate_key_positions(SIZE[0])
+    KEY_POS = draw.calculate_key_positions(util.SIZE[0])
     FREEZE_MODE = util.get_kw_value("freeze", False)
-    TIMESTEP = 1 / FPS
-    TOTAL_FRAMES = int(DATA[-1]["timestamp"] * FPS)
+    TIMESTEP = 1 / util.FPS
+    TOTAL_FRAMES = int(DATA[-1]["timestamp"] * util.FPS)
 
-    BUFFER_SIZE = min(300 * ((1920 * 1080) / (SIZE[0] * SIZE[1])), len(DATA))
+    BUFFER_SIZE = min(300 * ((1920 * 1080) / (util.SIZE[0] * util.SIZE[1])), len(DATA))
     QUEUE = Queue(int(BUFFER_SIZE))
-    FRAME_TOLERANCE = FPS // 5
+    FRAME_TOLERANCE = util.FPS // 5
 
     print("Preparing...")
 
-    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE, TOTAL_FRAMES))
+    p = Process(target=render_buffered, args=(DATA, KEY_EVENTS, KEY_POS, util.SIZE, TIMESTEP, QUEUE, FRAME_TOLERANCE, TOTAL_FRAMES))
     p.start()
 
     while QUEUE.qsize() < BUFFER_SIZE * 0.8: # Wait for buffer to be at least 80% full.

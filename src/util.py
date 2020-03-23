@@ -2,8 +2,6 @@ from sys import argv
 from time import time
 from pickle import load
 
-BAR_SPEED = 3
-
 def get_kw_value(keyword, default=None, mandatory=False):
     for arg in argv:
         split = arg.split("=")
@@ -12,6 +10,12 @@ def get_kw_value(keyword, default=None, mandatory=False):
     if mandatory:
         raise ValueError(f"Missing argument (and value) of keyword '{keyword}'.")
     return default
+
+def get_input_key(port, blocking=True):
+    if port is not None:
+        msg = port.receive(blocking)
+        return parse_midi_msg(msg, time())
+    return None
 
 def load_key_events(filename):
     data = []
@@ -29,6 +33,26 @@ def load_key_events(filename):
         key_events[key_data["key"]].append((key_data["timestamp"], key_data["down"]))
 
     return data, key_events
+
+def get_key_statuses(timestamp, keys):
+    key_statuses = [[("upcoming", 3, 100)] for i in range(88)]
+    processed = 0
+    for key_index, event_list in enumerate(keys):
+        i = 0
+        while i < len(event_list) and event_list[i][0] < timestamp + BAR_SPEED:
+            event_time, down = event_list[i]
+            if event_time < timestamp:
+                if down:
+                    key_statuses[key_index].append(("pressed", 0, event_list[i+1][0] - timestamp))
+                    processed += 1
+                else:
+                    key_statuses[key_index][-1] = ("passed", 0, 0)
+                    processed += 1
+            elif down and i < len(event_list) - 1:
+                end = event_list[i+1][0] - timestamp if i < len(event_list) - 1 else -1
+                key_statuses[key_index].append(("onscreen", event_time - timestamp, end))
+            i += 1
+    return key_statuses, processed
 
 def create_record_obj(down, velocity, key, timestamp):
     return {
@@ -83,3 +107,30 @@ def get_note_desc(note_id):
 
 def is_sharp(note_id):
     return note_id in SHARPS
+
+def convert_key(key_index, up):
+    sharp_distances = [1, 2, 1, 2, 1]
+    abs_index = key_index
+    sharp_index = 0
+    last_sharp = 0
+    index = 0
+    while index <= key_index:
+        if last_sharp == sharp_distances[sharp_index % 5]:
+            sharp_index += 1
+            abs_index += 1 if up else -1
+            last_sharp = 0
+        else:
+            last_sharp += 1
+        index += 1
+    return abs_index
+
+def to_absolute_key(key_index):
+    return convert_key(key_index, True)
+
+def to_sheet_key(key_index):
+    return convert_key(key_index, False)
+
+BAR_SPEED = 3
+SIZE_SPLIT = get_kw_value("size", "(1280,720)").split(",")
+SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
+FPS = float(get_kw_value("fps", 30))

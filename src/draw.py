@@ -2,36 +2,20 @@ import numpy as np
 import cv2
 from util import BAR_SPEED
 
-BG_COLOR = 65
+SYNTHESIA_BG_COLOR = 65
 KEY_HEIGHT_FRAC = 6
 KEY_WIDTH_FRAC = 52
 KEY_WIDTH_FRAC_SHARP = 160
 BAR_COLOR_FULL = (60, 175, 30)
 BAR_COLOR_SHARP = (50, 130, 30)
 SHARP_OFFSET = 3
+SHEET_BG_COLOR = 185
+SHEET_VERT_GAP = 40
+SHEET_SPACE_BETWEEN = 20
+SHEET_PADDING_X = 50
 
 def get_view_height(height):
     return height - (height // KEY_HEIGHT_FRAC)
-
-def get_key_statuses(timestamp, keys):
-    key_statuses = [[("upcoming", 3, 100)] for i in range(88)]
-    processed = 0
-    for key_index, event_list in enumerate(keys):
-        i = 0
-        while i < len(event_list) and event_list[i][0] < timestamp + BAR_SPEED:
-            event_time, down = event_list[i]
-            if event_time < timestamp:
-                if down:
-                    key_statuses[key_index].append(("pressed", 0, event_list[i+1][0] - timestamp))
-                    processed += 1
-                else:
-                    key_statuses[key_index][-1] = ("passed", 0, 0)
-                    processed += 1
-            elif down and i < len(event_list) - 1:
-                end = event_list[i+1][0] - timestamp if i < len(event_list) - 1 else -1
-                key_statuses[key_index].append(("onscreen", event_time - timestamp, end))
-            i += 1
-    return key_statuses, processed
 
 def calculate_key_positions(width):
     sharp_distances = [1, 2, 1, 2, 1]
@@ -130,7 +114,7 @@ def draw_progress(img, progress):
     cv2.line(img, (0, thickness), (length, thickness), (0, 0, 0), 1)
 
 def draw_piano(statuses, key_pos, size, progress, draw_presses=True):
-    img = np.full((size[1], size[0], 3), BG_COLOR, dtype="uint8")
+    img = np.full((size[1], size[0], 3), SYNTHESIA_BG_COLOR, dtype="uint8")
     h, w = img.shape[:2]
     key_thickness = w // KEY_WIDTH_FRAC
     sharp_thickness = w // KEY_WIDTH_FRAC_SHARP
@@ -216,3 +200,84 @@ def draw_hits(img, hits, total):
     draw_str(img, x_3, 100, str_3, size=1.2)
     if total > 0:
         draw_accuracy(img, int((hits / total) * 100))
+
+def draw_sharp(img, x, y):
+    hori_offset_x = 12
+    hori_offset_y = 12
+    vert_offset_x = 6
+    vert_offset_y = hori_offset_x * 2
+    hori_offset = 6
+    vert_offset = 12
+    cv2.line(img, (x - hori_offset_x, y - hori_offset_y + hori_offset),
+             (x + hori_offset_x, y - hori_offset_y - hori_offset), (0, 0, 0), 6)
+    cv2.line(img, (x - hori_offset_x, y + hori_offset_y + hori_offset),
+             (x + hori_offset_x, y + hori_offset_y - hori_offset), (0, 0, 0), 6)
+    cv2.line(img, (x - vert_offset_x, y - vert_offset_y),
+             (x - vert_offset_x, y + vert_offset_y + vert_offset), (0, 0, 0), 2)
+    cv2.line(img, (x + vert_offset_x, y - vert_offset_y - vert_offset),
+             (x + vert_offset_x, y + vert_offset_y), (0, 0, 0), 2)
+
+def draw_semitone(img, x, y, treble, index, color):
+    note_color = (0, 0, 0) if color is None else color
+    y_radius = SHEET_SPACE_BETWEEN // 2
+    cv2.ellipse(img, (x, y), (int(y_radius * 1.4), y_radius), 325, 0, 360, note_color, -1)
+    offset_x, offset_y = 1, 11
+    if treble:
+        threshold = 31
+        offset_y = -1 if index > threshold else 1
+        offset_x = -11 if index > threshold else 10
+    else:
+        threshold = 16
+        offset_y = 1 if index < threshold else -1
+        offset_x = 11 if index < threshold else -10
+    cv2.line(img, (x+offset_x, y-(SHEET_SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), color, 3)
+
+def draw_note(img, offset, key_index, treble, sharp, color=None):
+    x = 200 + 70 * offset
+    offset = -SHEET_VERT_GAP // 2 if treble else SHEET_VERT_GAP // 2
+    start_y = img.shape[0] // 2 + offset
+    y = int(start_y + (23 - key_index) * (SHEET_SPACE_BETWEEN / 2))
+    if ((treble and (key_index < 25 or key_index > 34))
+            or (not treble and (key_index < 10 or key_index > 22))):
+        line_y = y + 10 if key_index % 2 == 0 else y
+        cv2.line(img, (x-15, line_y), (x+15, line_y), (0, 0, 0), 2)
+    draw_semitone(img, x, y, treble, key_index, color)
+    if sharp:
+        draw_sharp(img, x-30, y)
+
+def overlay_img(img_1, img_2, x, y):
+    y1, y2 = y, y + img_2.shape[0]
+    x1, x2 = x, x + img_2.shape[1]
+
+    alpha_s = img_2[:, :, 3] / 255.0
+    alpha_l = 1.0 - alpha_s
+
+    for c in range(0, 3):
+        img_1[y1:y2, x1:x2, c] = (alpha_s * img_2[:, :, c] +
+                                  alpha_l * img_1[y1:y2, x1:x2, c])
+    return img_1
+
+def create_sheet_image(size):
+    img = np.full((size[1], size[0], 3), SHEET_BG_COLOR, dtype="uint8")
+    h, w = img.shape[:2]
+
+    for sign in range(-1, 2, 2):
+        for y_offset in range(5):
+            y = int(h / 2 + (y_offset * SHEET_SPACE_BETWEEN + SHEET_VERT_GAP) * sign)
+            cv2.line(img, (SHEET_PADDING_X, y), (w-SHEET_PADDING_X, y), (60, 60, 60), 2)
+
+    split_lines = 6
+    left = int((w - SHEET_PADDING_X * 2) / (split_lines-1))
+    for x_offset in range(split_lines):
+        x = SHEET_PADDING_X + int(left * x_offset)
+        cv2.line(img, (x, int(h / 2 - (4 * SHEET_SPACE_BETWEEN + SHEET_VERT_GAP))),
+                 (x, int(h / 2 + (4 * SHEET_SPACE_BETWEEN + SHEET_VERT_GAP))), (0, 0, 0), 2)
+
+    treb_clef_img = cv2.imread("../resources/img/treble-clef.png", -1)
+    treb_clef_img = cv2.resize(treb_clef_img, (62, int(SHEET_SPACE_BETWEEN*6.8)))
+    bass_clef_img = cv2.imread("../resources/img/bass-clef.png", -1)
+    bass_clef_img = cv2.resize(bass_clef_img, (62, int(SHEET_SPACE_BETWEEN*3.1)))
+    img = overlay_img(img, treb_clef_img, SHEET_PADDING_X + 10, int(h / 2 - SHEET_SPACE_BETWEEN * 7.25))
+    img = overlay_img(img, bass_clef_img, SHEET_PADDING_X + 10, int(h / 2 + SHEET_SPACE_BETWEEN * 2))
+
+    return img

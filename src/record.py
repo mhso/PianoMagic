@@ -13,13 +13,12 @@ STARTED = time()
 try:
     with mido.open_input() as inport:
         while True:
-            MSG = inport.receive(True)
-            PARSED_OBJ = util.parse_midi_msg(MSG, STARTED)
+            PARSED_OBJ = util.get_input_key(inport)
             if PARSED_OBJ is not None:
                 RECORDED_NOTES.append(PARSED_OBJ)
 
-                NOTE = util.get_note_desc(MSG.note)
-                if MSG.velocity > 0:
+                NOTE = util.get_note_desc(PARSED_OBJ["key"])
+                if PARSED_OBJ["velocity"] > 0:
                     print(f"{NOTE} up")
                 else:
                     print(f"{NOTE} down")
