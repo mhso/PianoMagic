@@ -1,7 +1,7 @@
 ## PianoMagic - Visualizing MIDI inputs from digital piano
 A collection of small programs for visualizing, and aiding in playing, any digital piano with MIDI input.
 
-![PianoMagic](http://mhooge.com/pianomagic.png)
+![PianoMagic](http://mhooge.com/misc/pianomagic.png)
 
 ### Features
 - Record and save your piano key strokes to a file
