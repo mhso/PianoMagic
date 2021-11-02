@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 from util import BAR_SPEED
 
+from time import time
+
 SYNTHESIA_BG_COLOR = 65
 KEY_HEIGHT_FRAC = 6
 KEY_WIDTH_FRAC = 52

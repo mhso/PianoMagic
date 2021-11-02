@@ -1,8 +1,11 @@
 from time import time
+
 import mido
 import cv2
-import util
+
+import argparsers
 import draw
+import util
 
 def get_pressed_keys(port):
     notes = []
@@ -12,28 +15,39 @@ def get_pressed_keys(port):
             notes.append(parsed_obj)
     return notes
 
-IMG = draw.create_sheet_image(util.SIZE)
+def main(args):
+    img = draw.create_sheet_image(args.size)
 
-try:
-    with mido.open_input() as inport:
-        ACTIVE_KEYS = [None] * 88
-        while True:
-            PRESSED_KEYS = get_pressed_keys(inport)
-            for KEY_INDEX, OBJ in enumerate(PRESSED_KEYS):
-                if OBJ["down"]:
-                    ACTIVE_KEYS[OBJ["key"]] = (OBJ, KEY_INDEX)
-                else:
-                    ACTIVE_KEYS[OBJ["key"]] = None
-            if PRESSED_KEYS != []:
-                IMG = draw.create_sheet_image(util.SIZE)
-            for i in range(88):
-                if ACTIVE_KEYS[i] is not None:
-                    NOTE_OBJ, KEY_INDEX = ACTIVE_KEYS[i]
-                    draw.draw_note(IMG, KEY_INDEX, util.to_sheet_key(NOTE_OBJ["key"]),
-                                   True, util.is_sharp(NOTE_OBJ["key"]))
-            cv2.imshow("Piano Quiz", IMG)
-            KEY = cv2.waitKey(10)
-            if KEY == ord('q'):
-                break
-except OSError:
-    print("WARNING: No digital piano detected, please connect one.")
+    try:
+        with mido.open_input() as inport:
+            active_keys = [None] * 88
+            while True:
+                pressed_keys = get_pressed_keys(inport)
+
+                for key_index, obj in enumerate(pressed_keys):
+                    if obj["down"]:
+                        active_keys[obj["key"]] = (obj, key_index)
+                    else:
+                        active_keys[obj["key"]] = None
+                if pressed_keys != []:
+                    img = draw.create_sheet_image(args.size)
+
+                for i in range(88):
+                    if active_keys[i] is not None:
+                        note_obj, key_index = active_keys[i]
+                        draw.draw_note(
+                            img, key_index, util.to_sheet_key(note_obj["key"]),
+                            True, util.is_sharp(note_obj["key"])
+                        )
+
+                cv2.imshow("Piano Quiz", img)
+                key = cv2.waitKey(10)
+                if key == ord('q'):
+                    break
+    except OSError:
+        print("WARNING: No digital piano detected, please connect one.")
+
+if __name__ == "__main__":
+    ARGS = argparsers.args_visual()
+
+    main(ARGS)

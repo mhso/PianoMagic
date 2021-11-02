@@ -1,10 +1,11 @@
 from time import time, sleep
 from glob import glob
 from pickle import dump
+
 from mss import mss
 import numpy as np
 import win32api as win
-import cv2
+
 import util
 import draw
 
@@ -18,7 +19,6 @@ COLORS = [
 ]
 
 SPACE_KEY_HEX = 0x20
-SPACE_STATE = win.GetKeyState(SPACE_KEY_HEX)
 KEYS_PRESSED = [False] * 88
 
 def get_key_statuses(img, key_positions, y, time_started):
@@ -47,50 +47,56 @@ def get_key_statuses(img, key_positions, y, time_started):
 
     return objects
 
-def space_pressed():
+def space_pressed(space_state):
     key_space = win.GetKeyState(SPACE_KEY_HEX)
-    return key_space != SPACE_STATE and key_space < 0
+    return key_space != space_state and key_space < 0
 
-PATH = "../resources/recorded/"
-NUM_FILES = len(glob(PATH + "*.bin"))
-FILE = f"{PATH}rec_{NUM_FILES}.bin"
-RECORDED_NOTES = []
+def main():
+    path = "../resources/recorded/"
+    num_files = len(glob(path + "*.bin"))
+    filename = f"{path}rec_{num_files}.bin"
+    recorded_notes = []
 
-while not space_pressed():
-    sleep(0.01)
+    space_state = win.GetKeyState(SPACE_KEY_HEX)
 
-SPACE_STATE = win.GetKeyState(SPACE_KEY_HEX)
+    while not space_pressed(space_state):
+        sleep(0.01)
 
-sleep(0.5)
+    space_state = win.GetKeyState(SPACE_KEY_HEX)
 
-try:
-    with mss() as sct:
-        monitor = sct.monitors[1]
+    sleep(0.5)
 
-        height = 110
-        x_offset = 100
+    try:
+        with mss() as sct:
+            monitor = sct.monitors[1]
 
-        BBOX = (monitor["left"], monitor["top"] + monitor["height"] - height - 3, monitor["width"] - x_offset, monitor["top"] + monitor["height"] - height + 3)
-        KEY_POS = draw.calculate_key_positions((monitor["width"] - x_offset) + 5)
+            height = 110
+            x_offset = 100
 
-        STARTED = time()
-        Y_POS = 3
+            bbox = (monitor["left"], monitor["top"] + monitor["height"] - height - 3, monitor["width"] - x_offset, monitor["top"] + monitor["height"] - height + 3)
+            key_pos = draw.calculate_key_positions((monitor["width"] - x_offset) + 5)
 
-        while not space_pressed():
-            SC = np.array(sct.grab(BBOX))
+            started = time()
+            y_pos = 3
 
-            PARSED_OBJECTS = get_key_statuses(SC, KEY_POS, Y_POS, STARTED)
-            if PARSED_OBJECTS != []:
-                RECORDED_NOTES.extend(PARSED_OBJECTS)
-except KeyboardInterrupt:
-    pass
-finally:
-    for frame_data in reversed(RECORDED_NOTES):
-        for key in range(88):
-            if frame_data["key"] == key:
-                if frame_data["down"]:
-                    RECORDED_NOTES.append(util.create_record_obj(False, 0, frame_data["key"], time() - STARTED))
-                    break
-    with open(FILE, "wb") as r_out:
-        dump(RECORDED_NOTES, r_out)
-        print(f"Saved recording to file '{FILE}'")
+            while not space_pressed(space_state):
+                sc = np.array(sct.grab(bbox))
+
+                parsed_objects = get_key_statuses(sc, key_pos, y_pos, started)
+                if parsed_objects != []:
+                    recorded_notes.extend(parsed_objects)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for frame_data in reversed(recorded_notes):
+            for key in range(88):
+                if frame_data["key"] == key:
+                    if frame_data["down"]:
+                        recorded_notes.append(util.create_record_obj(False, 0, frame_data["key"], time() - started))
+                        break
+        with open(filename, "wb") as r_out:
+            dump(recorded_notes, r_out)
+            print(f"Saved recording to file '{filename}'")
+
+if __name__ == "__main__":
+    main()

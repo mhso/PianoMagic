@@ -1,12 +1,13 @@
 import random
 from time import time
+
 import mido
 import numpy as np
 import cv2
-import util
-import draw
 
-DIFFICULTY = util.get_kw_value("diff", 2) # Difficulty ranges from 1-5
+import argparsers
+import draw
+import util
 
 def get_countdown_color(progress):
     r_lo = 30
@@ -42,13 +43,13 @@ def draw_out_of_time(img):
 
 QUESTIONS = 200
 
-def generate_questions(q_number):
+def generate_questions(q_number, difficulty):
     data = []
-    duration_init = 12 - DIFFICULTY
-    duration_end = 7 - (DIFFICULTY // 2)
+    duration_init = 12 - difficulty
+    duration_end = 7 - (difficulty // 2)
     duration = duration_init - (q_number / QUESTIONS) * (duration_init - duration_end)
-    amount_init = DIFFICULTY
-    amount_end = 6 + DIFFICULTY
+    amount_init = difficulty
+    amount_end = 6 + difficulty
     amount = int(amount_end * (q_number / QUESTIONS)) + amount_init
     for _ in range(amount):
         is_treble = random.random() > 0.5
@@ -126,11 +127,11 @@ def animate_questions(img, notes, timelimit, port):
         draw_pressed_notes(img, sheet_note, is_treble, is_sharp, statuses[i], pressed_notes[i], i)
     return correct, 1 if curr_note == len(notes) else 0
 
-def training_loop(port):
+def training_loop(args, port):
     correct = 0
     for question in range(QUESTIONS):
-        image = draw.create_sheet_image(util.SIZE)
-        notes, duration = generate_questions(question)
+        image = draw.create_sheet_image(args.size)
+        notes, duration = generate_questions(question, args.difficulty)
         draw_score(image, correct, question+len(notes))
         notes_correct, status = animate_questions(image, notes, duration*1000, port)
         correct += notes_correct
@@ -144,9 +145,11 @@ def training_loop(port):
             break
     print(f"Training over! You hit '{correct}' correct notes out of a total of '{QUESTIONS}'.")
 
-try:
-    with mido.open_input() as inport:
-        training_loop(inport)
-except OSError:
-    print("WARNING: No digital piano detected, please connect one.")
-    training_loop(None)
+if __name__ == "__main__":
+    ARGS = argparsers.args_training()
+    try:
+        with mido.open_input() as inport:
+            training_loop(ARGS, inport)
+    except OSError:
+        print("WARNING: No digital piano detected, please connect one.")
+        training_loop(ARGS, None)

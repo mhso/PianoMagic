@@ -13,7 +13,7 @@ STARTED = time()
 try:
     with mido.open_input() as inport:
         while True:
-            PARSED_OBJ = util.get_input_key(inport)
+            PARSED_OBJ = util.get_input_key(inport, STARTED)
             if PARSED_OBJ is not None:
                 RECORDED_NOTES.append(PARSED_OBJ)
 

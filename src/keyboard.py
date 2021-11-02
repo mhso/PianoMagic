@@ -1,4 +1,3 @@
-from time import sleep
 import mido
 import win32api as win
 import win32con as con

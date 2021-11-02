@@ -11,10 +11,10 @@ def get_kw_value(keyword, default=None, mandatory=False):
         raise ValueError(f"Missing argument (and value) of keyword '{keyword}'.")
     return default
 
-def get_input_key(port, blocking=True):
+def get_input_key(port, time_started=None, blocking=True):
     if port is not None:
         msg = port.receive(blocking)
-        return parse_midi_msg(msg, time())
+        return parse_midi_msg(msg, time_started or time())
     return None
 
 def load_key_events(filename):
@@ -65,11 +65,6 @@ def create_record_obj(down, velocity, key, timestamp):
 def parse_midi_msg(msg, time_started):
     rec_obj = None
     if msg is not None and msg.type != "clock":
-        rec_obj = {
-            "down": True,
-            "velocity": 0,
-            "key": -1
-        }
         key = msg.note - 21
         is_down = msg.velocity > 0
         timestamp = time() - time_started
@@ -131,6 +126,4 @@ def to_sheet_key(key_index):
     return convert_key(key_index, False)
 
 BAR_SPEED = 3
-SIZE_SPLIT = get_kw_value("size", "(1280,720)").split(",")
-SIZE = (int(SIZE_SPLIT[0][1:]), int(SIZE_SPLIT[1][:-1]))
-FPS = float(get_kw_value("fps", 30))
+RENDER_PATH = "../resources/rendered"
