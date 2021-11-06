@@ -182,11 +182,11 @@ def main(args):
 
                 frame_time = (time() - frame_before) * 1000
 
-                sleep = 1
+                time_to_sleep = 1
                 if frame_time < ms_per_frame:
-                    sleep = (ms_per_frame - frame_time) / args.speed
+                    time_to_sleep = (ms_per_frame - frame_time) / args.speed
 
-                key = cv2.waitKey(int(sleep))
+                key = cv2.waitKey(int(time_to_sleep))
                 if key == ord('q'):
                     cv2.destroyAllWindows()
                     break
