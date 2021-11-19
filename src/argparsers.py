@@ -28,6 +28,16 @@ def parser_visual():
 
     return parser
 
+def args_record():
+    parser = argparse.ArgumentParser()
+
+    path = "../resources/recorded/"
+    num_files = len(glob(path + "*.bin"))
+    default_path = f"{path}rec_{num_files}.bin"
+    parser.add_argument("--out_file", type=str, default=default_path)
+
+    return parser.parse_args()
+
 def args_render():
     parser = parser_visual()
 

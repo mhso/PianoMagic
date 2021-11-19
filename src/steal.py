@@ -1,11 +1,11 @@
 from time import time, sleep
-from glob import glob
 from pickle import dump
 
 from mss import mss
 import numpy as np
 import win32api as win
 
+import argparsers
 import util
 import draw
 
@@ -51,10 +51,7 @@ def space_pressed(space_state):
     key_space = win.GetKeyState(SPACE_KEY_HEX)
     return key_space != space_state and key_space < 0
 
-def main():
-    path = "../resources/recorded/"
-    num_files = len(glob(path + "*.bin"))
-    filename = f"{path}rec_{num_files}.bin"
+def main(args):
     recorded_notes = []
 
     space_state = win.GetKeyState(SPACE_KEY_HEX)
@@ -94,9 +91,11 @@ def main():
                     if frame_data["down"]:
                         recorded_notes.append(util.create_record_obj(False, 0, frame_data["key"], time() - started))
                         break
-        with open(filename, "wb") as r_out:
+        with open(args.out_file, "wb") as r_out:
             dump(recorded_notes, r_out)
-            print(f"Saved recording to file '{filename}'")
+            print(f"Saved recording to file '{args.out_file}'")
 
 if __name__ == "__main__":
-    main()
+    ARGS = argparsers.args_record()
+
+    main(ARGS)

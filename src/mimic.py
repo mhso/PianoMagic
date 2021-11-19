@@ -57,7 +57,6 @@ def main(args):
     data, key_events = util.load_key_events(input_name)
 
     key_pos = draw.calculate_key_positions(args.size[0])
-    freeze_mode = util.get_kw_value("freeze", False)
     timestep = 1 / args.fps
     total_frames = int(data[-1]["timestamp"] * args.fps)
 
@@ -83,6 +82,7 @@ def main(args):
     points_per_key = [0] * 88
     base_reward = 5
     hits = 0
+    error_deduction = 10
     total_notes = 0
     total_points = 0
     streak = 0
@@ -93,7 +93,7 @@ def main(args):
                 frame_before = time()
                 (img, frame_events) = queue.get()
 
-                while freeze_mode and frame_events:
+                while args.freeze and frame_events:
                     msg = inport.receive(True)
                     parsed_obj = util.parse_midi_msg(msg, started)
                     if parsed_obj is not None and parsed_obj["key"] == frame_events[2][note_id]:
@@ -106,52 +106,75 @@ def main(args):
 
                 for note_id in range(88):
                     frame_reshaped = [x[note_id] for x in frame_events]
+                    # Check if current key should be pressed at this moment.
                     if any(frame_reshaped):
+                        # If current key is not held down, mark it as being down.
                         if notes_reset[note_id]:
                             notes_reset[note_id] = False
-                            total_notes += 1
+                            total_notes += 1 # Increment total notes.
+
+                        # Get the press velocity for the currently held key.
                         press_evnt = 0
                         for evnt in frame_reshaped:
                             if evnt != 0:
                                 press_evnt = evnt
+
+                        # Ensure points for the current key is not negative.
                         if points_per_key[note_id] < 0:
                             points_per_key[note_id] = 0
+
+                        # Check if current key is pressed sufficiently quickly to award points.
                         if key_grace[note_id] < frame_tolerance:
+                            # Check if we pressed down and whether current event requires us to do so.
                             if press_evnt > 0 and keys_held[note_id]:
                                 draw.draw_correct_note(img, note_id, key_pos)
+                                # Check if we are yet to award points.
                                 if points_per_key[note_id] == 0:
+                                    # Add points based on how close to perfect timing the press was.
                                     points_per_key[note_id] = base_reward * (frame_tolerance - key_grace[note_id])
                                     hits += 1
                                     streak += 1
                                     total_points += points_per_key[note_id]
+                                # Indicate that the current note is currently being drawn.
                                 draw_event[note_id] = True
                                 key_grace[note_id] = 0
+                            # Check if key is not pressed, and current event requires the key to unpressed.
                             elif press_evnt < 0 and not keys_held[note_id] and draw_event[note_id]:
+                                # Add points based on how close to perfect timing the release was.
                                 points_per_key[note_id] = base_reward * (frame_tolerance - key_grace[note_id])
                                 total_points += points_per_key[note_id]
-                                draw_event[note_id] = False
-                                note_over[note_id] = True
+                                draw_event[note_id] = False # No active draw event.
+                                note_over[note_id] = True # Note is done (no longer being held).
                                 key_grace[note_id] = 0
                                 streak += 1
                                 hits += 1
+
+                        # Check if we are holding down a key. If so, mark note as being active.
                         if press_evnt > 0:
                             note_over[note_id] = False
+                        # Check if we are not holding down a key, but a note is still active
+                        # (meaning the key was released too soon).
                         elif not note_over[note_id]:
-                            points_per_key[note_id] = -10
+                            points_per_key[note_id] = -error_deduction # Deduct points.
                             total_points += points_per_key[note_id]
-                            note_over[note_id] = True
+                            note_over[note_id] = True # Mark note as not being active anymore.
                             key_grace[note_id] = 0
                         if not note_over[note_id]:
                             key_grace[note_id] += 1
-                    else:
+                    else: # No event is active for current key, mark it as reset.
                         notes_reset[note_id] = True
+
+                    # Check whether a key should be held down, but was pressed too late.
                     if key_grace[note_id] >= frame_tolerance and not note_over[note_id]:
                         draw.draw_wrong_note(img, note_id, key_pos)
                         if points_per_key[note_id] == 0:
+                            # Deduct points (but only once per note).
                             streak = 0
-                            points_per_key[note_id] = -10
+                            points_per_key[note_id] = -error_deduction
                             total_points += points_per_key[note_id]
+                    # Check whether a note is currently being drawn as pressed.
                     elif draw_event[note_id]:
+                        # Check whether the currently drawn key is being held.
                         if draw_event[note_id] > 0 and keys_held[note_id]:
                             key_grace[note_id] = 0
                             draw.draw_correct_note(img, note_id, key_pos)
@@ -161,7 +184,7 @@ def main(args):
                                 draw.draw_wrong_note(img, note_id, key_pos)
                                 if points_per_key[note_id] == 0:
                                     streak = 0
-                                    points_per_key[note_id] = -10
+                                    points_per_key[note_id] = -error_deduction
                                     total_points += points_per_key[note_id]
                                     if note_over[note_id]:
                                         key_grace[note_id] = 0
@@ -170,7 +193,7 @@ def main(args):
                         draw.draw_wrong_note(img, note_id, key_pos)
                         if points_per_key[note_id] == 0:
                             streak = 0
-                            points_per_key[note_id] = -10
+                            points_per_key[note_id] = -error_deduction
                             total_points += points_per_key[note_id]
 
                 total_points = int(total_points) if total_points >= 0 else 0

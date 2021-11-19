@@ -1,33 +1,37 @@
 from time import time
-from glob import glob
 from pickle import dump
+
 import mido
+
 import util
+import argparsers
 
-PATH = "../resources/recorded/"
-NUM_FILES = len(glob(PATH + "*.bin"))
-OUTPUT_FILE = f"{PATH}" + util.get_kw_value("out", f"rec_{NUM_FILES}") + ".bin"
-RECORDED_NOTES = []
+def main(args):
+    recorded_notes = []
+    started = time()
+    try:
+        with mido.open_input() as inport:
+            while True:
+                parsed_obj = util.get_input_key(inport, started)
+                if parsed_obj is not None:
+                    recorded_notes.append(parsed_obj)
 
-STARTED = time()
-try:
-    with mido.open_input() as inport:
-        while True:
-            PARSED_OBJ = util.get_input_key(inport, STARTED)
-            if PARSED_OBJ is not None:
-                RECORDED_NOTES.append(PARSED_OBJ)
+                    note = util.get_note_desc(parsed_obj["key"])
+                    if parsed_obj["velocity"] > 0:
+                        print(f"{note} up")
+                    else:
+                        print(f"{note} down")
+    except OSError:
+        print("Error: No digital piano detected, please connect one.")
+        exit(0)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        with open(args.out_file, "wb") as r_out:
+            dump(recorded_notes, r_out)
+            print(f"Saved recording to file '{args.out_file}'")
 
-                NOTE = util.get_note_desc(PARSED_OBJ["key"])
-                if PARSED_OBJ["velocity"] > 0:
-                    print(f"{NOTE} up")
-                else:
-                    print(f"{NOTE} down")
-except OSError:
-    print("Error: No digital piano detected, please connect one.")
-    exit(0)
-except KeyboardInterrupt:
-    pass
-finally:
-    with open(OUTPUT_FILE, "wb") as r_out:
-        dump(RECORDED_NOTES, r_out)
-        print(f"Saved recording to file '{OUTPUT_FILE}'")
+if __name__ == "__main__":
+    ARGS = argparsers.args_record()
+
+    main(ARGS)
