@@ -2,6 +2,9 @@ from sys import argv
 from time import time
 from pickle import load
 
+BAR_SPEED = 3
+RENDER_PATH = "../resources/rendered"
+
 def get_kw_value(keyword, default=None, mandatory=False):
     for arg in argv:
         split = arg.split("=")
@@ -117,6 +120,7 @@ def convert_key(key_index, up):
         else:
             last_sharp += 1
         index += 1
+
     return abs_index
 
 def to_absolute_key(key_index):
@@ -124,6 +128,3 @@ def to_absolute_key(key_index):
 
 def to_sheet_key(key_index):
     return convert_key(key_index, False)
-
-BAR_SPEED = 3
-RENDER_PATH = "../resources/rendered"

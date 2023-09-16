@@ -27,9 +27,10 @@ def main(args):
     except KeyboardInterrupt:
         pass
     finally:
-        with open(args.out_file, "wb") as r_out:
-            dump(recorded_notes, r_out)
-            print(f"Saved recording to file '{args.out_file}'")
+        if recorded_notes != []:
+            with open(args.out_file, "wb") as r_out:
+                dump(recorded_notes, r_out)
+                print(f"Saved recording to file '{args.out_file}'")
 
 if __name__ == "__main__":
     ARGS = argparsers.args_record()

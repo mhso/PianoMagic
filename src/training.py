@@ -27,6 +27,7 @@ def draw_countdown(img, progress):
     width = int(progress * max_width)
     y = int(img.shape[0] - draw.SHEET_PADDING_X)
     color = get_countdown_color(progress)
+
     cv2.line(img, (offset_x, y), (img.shape[1] - offset_x, y), (0, 0, 0), 12)
     cv2.line(img, (offset_x, y), (offset_x + width, y), color, 10)
 
@@ -34,12 +35,16 @@ def draw_score(img, correct, total):
     point_str = "Score: " + str(correct) + "/" + str(total)
     x = img.shape[1] // 2 - (len(point_str) * 17)
     y = img.shape[0] // 6
+
     cv2.putText(img, point_str, (x, y), cv2.QT_FONT_NORMAL, 2, (0, 0, 0), 4)
 
 def draw_out_of_time(img):
     h, w = img.shape[:2]
-    cv2.putText(img, "Out of time!", (w // 2 - 300, h // 2 + 30),
-                cv2.QT_FONT_NORMAL, 3, (0, 0, 255), 5)
+
+    cv2.putText(
+        img, "Out of time!", (w // 2 - 300, h // 2 + 30),
+        cv2.QT_FONT_NORMAL, 3, (0, 0, 255), 5
+    )
 
 QUESTIONS = 200
 
@@ -51,22 +56,27 @@ def generate_questions(q_number, difficulty):
     amount_init = difficulty
     amount_end = 6 + difficulty
     amount = int(amount_end * (q_number / QUESTIONS)) + amount_init
+
     for _ in range(amount):
         is_treble = random.random() > 0.5
+
         if is_treble:
             choices = [x for x in range(30, 88)]
             weights = np.array([2 if x > 60 else 1 for x in choices])
         else:
             choices = [x for x in range(0, 59)]
             weights = np.array([2 if x > 30 else 1 for x in choices])
+
         weights = weights / sum(weights)
         note = np.random.choice(choices, size=1, p=weights)[0]
         data.append((note, is_treble))
+
     return data, duration
 
-def draw_pressed_notes(img, sheet_note, is_treble, is_sharp, status, pressed, index):
+def draw_notes(img, sheet_note, is_treble, is_sharp, status, pressed, index):
     note_draw, treble_draw, sharp_draw = sheet_note, is_treble, is_sharp
     color = None
+
     if status == 1:
         color = (0, 255, 0)
     elif status == -1:
@@ -74,7 +84,14 @@ def draw_pressed_notes(img, sheet_note, is_treble, is_sharp, status, pressed, in
         note_draw, treble_draw = pressed
         sharp_draw = util.is_sharp(note_draw)
         sheet_note = util.to_sheet_key(note_draw)
+
     draw.draw_note(img, index, sheet_note, treble_draw, sharp_draw, color)
+
+def draw_keys(img, note_draw, index):
+    x = img.shape[1] // 2 - 80
+    y = img.shape[0] - 100
+
+    draw.draw_key_name(img, index, x, y, note_draw)
 
 def animate_questions(img, notes, timelimit, port):
     curr_note = 0
@@ -85,64 +102,87 @@ def animate_questions(img, notes, timelimit, port):
     changed = [True for _ in notes]
     pressed_notes = [None for _ in notes]
     last_note = time()
+
     while elapsed_time < timelimit and curr_note < len(notes):
         before = time()
         pressed_note = util.get_input_key(port, blocking=False)
+
         if pressed_note and pressed_note["down"]:
             pressed_note = pressed_note["key"]
         else:
             pressed_note = None
+
         if before - last_note < 0.5:
             pressed_note = None
+
         for i, (note, is_treble) in enumerate(notes):
             is_sharp = util.is_sharp(note)
             sheet_note = util.to_sheet_key(note)
+
             if changed[i]:
-                draw_pressed_notes(img, sheet_note, is_treble,
-                                   is_sharp, statuses[i], pressed_notes[i], i)
+                draw_notes(
+                    img, sheet_note, is_treble,
+                    is_sharp, statuses[i], pressed_notes[i], i
+                )
+                draw_keys(img, note, i)
+
                 changed[i] = False
+
             if pressed_note is not None and i == curr_note:
                 last_note = time()
+
                 if pressed_note == note:
                     statuses[i] = 1
                     correct += 1
                 else:
                     statuses[i] = -1
+
                 curr_note += 1
                 changed[i] = True
                 pressed_notes[i] = (pressed_note, is_treble)
                 pressed_note = None
+
         draw_countdown(img, elapsed_time / timelimit)
 
         cv2.imshow("Piano Quiz", img)
+
         real_time = (time() - before) * 1000
         time_to_sleep = int(sleep_time - real_time) if real_time < sleep_time else sleep_time
+
         key = cv2.waitKey(time_to_sleep)
         if key == ord('q'):
             return correct, -1
+
         elapsed_time += time_to_sleep
+
     for i, (note, is_treble) in enumerate(notes):
         is_sharp = util.is_sharp(note)
         sheet_note = util.to_sheet_key(note)
-        draw_pressed_notes(img, sheet_note, is_treble, is_sharp, statuses[i], pressed_notes[i], i)
+        draw_notes(img, sheet_note, is_treble, is_sharp, statuses[i], pressed_notes[i], i)
+
     return correct, 1 if curr_note == len(notes) else 0
 
 def training_loop(args, port):
     correct = 0
+
     for question in range(QUESTIONS):
         image = draw.create_sheet_image(args.size)
         notes, duration = generate_questions(question, args.difficulty)
-        draw_score(image, correct, question+len(notes))
-        notes_correct, status = animate_questions(image, notes, duration*1000, port)
+        draw_score(image, correct, question + len(notes))
+        notes_correct, status = animate_questions(image, notes, duration * 1000, port)
         correct += notes_correct
+
         if status == -1: # Quit.
             break
         elif status == 0: # Out of time.
             draw_out_of_time(image)
+
         cv2.imshow("Piano Quiz", image)
+
         key = cv2.waitKey(1500)
         if key == ord('q'):
             break
+
     print(f"Training over! You hit '{correct}' correct notes out of a total of '{QUESTIONS}'.")
 
 if __name__ == "__main__":

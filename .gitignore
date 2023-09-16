@@ -1,3 +1,4 @@
 /resources/rendered/*
 .vscode
 __pycache__
+venv

@@ -1,8 +1,6 @@
 import numpy as np
 import cv2
-from util import BAR_SPEED
-
-from time import time
+from util import BAR_SPEED, get_note_desc
 
 SYNTHESIA_BG_COLOR = 65
 KEY_HEIGHT_FRAC = 6
@@ -104,6 +102,7 @@ def draw_key(img, x, x_1, x_2, any_pressed, is_sharp, press_color=(205, 120, 70)
     color = press_color if any_pressed else key_color
     if not is_sharp:
         y_2 = height if any_pressed else y_2
+
     cv2.rectangle(img, (x_1, view_height), (x_2, y_2), color, -1)
     if not is_sharp:
         cv2.line(img, (x, view_height), (x, y_unp), (0, 0, 0))
@@ -197,9 +196,11 @@ def draw_hits(img, hits, total):
     x_1 = w - len(str_1 + str_2 + str_3) * space_per_char - 20
     x_2 = w - len(str_1 + str_2) * space_per_char - 20
     x_3 = w - len(str_1) * space_per_char - 20
+
     draw_str(img, x_1, 100, str_1, color=(0, 190, 0), size=1.2)
     draw_str(img, x_2, 100, str_2, size=1.2)
     draw_str(img, x_3, 100, str_3, size=1.2)
+
     if total > 0:
         draw_accuracy(img, int((hits / total) * 100))
 
@@ -210,20 +211,29 @@ def draw_sharp(img, x, y):
     vert_offset_y = hori_offset_x * 2
     hori_offset = 6
     vert_offset = 12
-    cv2.line(img, (x - hori_offset_x, y - hori_offset_y + hori_offset),
-             (x + hori_offset_x, y - hori_offset_y - hori_offset), (0, 0, 0), 6)
-    cv2.line(img, (x - hori_offset_x, y + hori_offset_y + hori_offset),
-             (x + hori_offset_x, y + hori_offset_y - hori_offset), (0, 0, 0), 6)
-    cv2.line(img, (x - vert_offset_x, y - vert_offset_y),
-             (x - vert_offset_x, y + vert_offset_y + vert_offset), (0, 0, 0), 2)
-    cv2.line(img, (x + vert_offset_x, y - vert_offset_y - vert_offset),
-             (x + vert_offset_x, y + vert_offset_y), (0, 0, 0), 2)
+    cv2.line(
+        img, (x - hori_offset_x, y - hori_offset_y + hori_offset),
+        (x + hori_offset_x, y - hori_offset_y - hori_offset), (0, 0, 0), 6
+    )
+    cv2.line(
+        img, (x - hori_offset_x, y + hori_offset_y + hori_offset),
+        (x + hori_offset_x, y + hori_offset_y - hori_offset), (0, 0, 0), 6
+    )
+    cv2.line(
+        img, (x - vert_offset_x, y - vert_offset_y),
+        (x - vert_offset_x, y + vert_offset_y + vert_offset), (0, 0, 0), 2
+    )
+    cv2.line(
+        img, (x + vert_offset_x, y - vert_offset_y - vert_offset),
+        (x + vert_offset_x, y + vert_offset_y), (0, 0, 0), 2
+    )
 
 def draw_semitone(img, x, y, treble, index, color):
     note_color = (0, 0, 0) if color is None else color
     y_radius = SHEET_SPACE_BETWEEN // 2
     cv2.ellipse(img, (x, y), (int(y_radius * 1.4), y_radius), 325, 0, 360, note_color, -1)
     offset_x, offset_y = 1, 11
+
     if treble:
         threshold = 31
         offset_y = -1 if index > threshold else 1
@@ -232,6 +242,7 @@ def draw_semitone(img, x, y, treble, index, color):
         threshold = 16
         offset_y = 1 if index < threshold else -1
         offset_x = 11 if index < threshold else -10
+
     cv2.line(img, (x+offset_x, y-(SHEET_SPACE_BETWEEN * 3 * offset_y)), (x+offset_x, y), color, 3)
 
 def draw_note(img, offset, key_index, treble, sharp, color=None):
@@ -243,9 +254,34 @@ def draw_note(img, offset, key_index, treble, sharp, color=None):
             or (not treble and (key_index < 10 or key_index > 22))):
         line_y = y + 10 if key_index % 2 == 0 else y
         cv2.line(img, (x-15, line_y), (x+15, line_y), (0, 0, 0), 2)
+
     draw_semitone(img, x, y, treble, key_index, color)
+
     if sharp:
         draw_sharp(img, x-30, y)
+
+def draw_key_name(img, offset, start_x, y, key_index, color=None):
+    key_name = get_note_desc(key_index)
+
+    text_scale = 1.75
+    gap = 10
+    text_width = int(10 + len(key_name) * 28 * text_scale)
+    text_height = int(50 * text_scale)
+
+    offset_x = gap + text_width * offset
+    if start_x > img.shape[1] // 2:
+        offset_x = -offset_x
+
+    x = start_x + offset_x
+
+    cv2.rectangle(
+        img, (x - 3, y - text_height), (x + text_width, y + 3),
+        (SHEET_BG_COLOR,) * 3, cv2.FILLED
+    )
+
+    note_color = (0, 0, 0) if color is None else color
+
+    cv2.putText(img, key_name, (x, y), cv2.QT_FONT_NORMAL, text_scale, note_color, 2)
 
 def overlay_img(img_1, img_2, x, y):
     y1, y2 = y, y + img_2.shape[0]

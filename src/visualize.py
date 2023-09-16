@@ -40,7 +40,7 @@ def main(args):
                             True, util.is_sharp(note_obj["key"])
                         )
 
-                cv2.imshow("Piano Quiz", img)
+                cv2.imshow("Piano Keys", img)
                 key = cv2.waitKey(10)
                 if key == ord('q'):
                     break
